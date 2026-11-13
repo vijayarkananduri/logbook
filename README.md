@@ -1,23 +1,27 @@
 # Logbook for Android
 
-A private, local-first Android thought log with a warm paper interface, handwritten-feeling headings, review-before-save note capture, local search, todos, a deterministic text helper, light/dark themes, JSON import/export, and optional on-device speech input.
+Logbook is a private, local-first mind space. Catch a thought, review its suggested shelves, find it again, and move an explicit next step into Things in motion. The app uses a warm paper-and-ink identity with pumpkin, amber, husky grey, rust, mango and lime accents; Urbanist body text; and Caveat display headings.
 
-## Build
+## Build and download
 
-The **Build debug APK** GitHub Actions workflow builds `app-debug.apk` on pushes to `main` or via **Actions → Build debug APK → Run workflow**. Download it from the workflow run’s artifacts.
+The **Build debug APK** GitHub Actions workflow builds `app-debug.apk` on pushes to `main` or via **Actions → Build debug APK → Run workflow**. It publishes the latest APK as an asset on the private `logbook-debug-latest` GitHub release. The repository and asset remain private. This is an unsigned debug build, not a production release.
 
 ## Privacy and offline behavior
 
-- The Android manifest intentionally has **no `INTERNET` permission**. There are no accounts, sync, analytics, ads, network AI, or remote speech fallback.
-- Memory and todo records use SQLCipher with a database key wrapped by an Android Keystore AES-GCM key. Keystore key loss makes the encrypted records unreadable; uninstalling the app removes local records. Automatic cloud/device backup is disabled. Use the in-app JSON export to make a user-controlled copy.
-- Voice is foreground-only and requested after tapping Mic. Only Android’s on-device recognizer API is used, when that API reports availability. It requires a locally available language model; otherwise Logbook explains that voice is unavailable and text entry remains usable. Speech availability has not yet been verified against a device matrix.
-- Notifications are local Android reminders. Android 13+ notification permission is not yet requested contextually by this initial project; permission and reminder delivery should be tested on devices before relying on it.
-- JSON exports contain private writing. Pick a local destination; Android document providers may also present cloud locations. The app does not upload the file.
+- The Android manifest intentionally has **no `INTERNET` permission**. There are no accounts, sync, analytics, ads, network AI or remote speech fallback.
+- Memories and tasks use SQLCipher. The database passphrase is wrapped with an Android Keystore AES-GCM key. Loss of that key makes the encrypted database unreadable; uninstalling removes local records. Automatic cloud/device backup is disabled. JSON export is the user-controlled portability path.
+- Voice is foreground-only and uses Android's on-device recognizer only when Android 12+ reports an installed on-device model. Otherwise, Logbook explains the limitation and keeps text entry available. Review the transcript before saving.
+- Reminder alarms are local. Android 13+ notification permission is requested only when a dated task needs an alert. Completed, deleted and cleared tasks have their pending alarms cancelled; unfinished alarms are restored after reboot.
+- JSON files contain personal writing. Choose a destination you trust; a document picker may offer cloud-backed providers even though Logbook itself does not upload the file.
 
-## Design
+## Product behavior
 
-Warm paper/ink foundation with amber, pumpkin orange, husky grey, rust, mango/blush and lime accents; 18/12/8dp-like rounded hierarchy; responsive system text sizing; a low-resource frosted-glass preference (flat translucent surfaces instead of blur); and bundled Urbanist body and Caveat display fonts (SIL Open Font License).
+- The home screen surfaces a capture action, today's thought count, open-task count and recent memories.
+- Search ranks matches across thought text, categories and locally extracted attributes. Category suggestions, name/link/date extraction, deadline parsing and the local guide are deterministic rules, not generative AI.
+- A captured thought is reviewed before it is saved. Possible actions can be optionally added to Tasks in the same database transaction as the thought.
+- The interface supports warm light/dark themes and six accent choices. Liquid-glass sheen and lift are optional; reduced-effects mode uses flatter surfaces without blur or shadows.
+- JSON import/export, profile name, onboarding replay and clear-all controls are available in Settings.
 
-## Status and scope
+## Validation notes
 
-This is an Android project plus CI build workflow, not a signed release. CI generates an installable debug APK; no private signing key is stored in GitHub. Validate the full source-handoff acceptance matrix on real devices, especially import rollback, notification permissions/restart behavior, TalkBack, large fonts, database key lifecycle, and the installed offline speech model. No release or offline speech claim should be inferred from a CI build alone.
+CI verifies that the debug APK compiles and is published. A successful build does not prove device/runtime behavior. Validate on physical devices, especially on-device speech model availability, Android notification permissions, reminder delivery across reboot, SQLCipher key lifecycle, import/export rollback, TalkBack, large text and reduced-effects performance.
