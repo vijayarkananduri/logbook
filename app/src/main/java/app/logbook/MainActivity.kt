@@ -2,82 +2,444 @@ package app.logbook
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
-import androidx.compose.foundation.*
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.*
-import androidx.compose.ui.draw.*
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.graphics.*
-import androidx.compose.ui.platform.*
-import androidx.compose.ui.text.font.*
-import androidx.compose.ui.text.style.*
-import androidx.compose.ui.unit.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.*
+import androidx.core.view.WindowCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
-class MainActivity:ComponentActivity(){override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);setContent{LogbookApp(LocalStore(this))}}}
-private val cream=Color(0xFFF5F0E8);private val ink=Color(0xFF2C2416);private val orange=Color(0xFFE8752A);private val amber=Color(0xFFC8943A);private val rust=Color(0xFF9F4030);private val mango=Color(0xFFF0B5A3);private val lime=Color(0xFFDCEB82);private val husky=Color(0xFF7D8587)
-private val palette=listOf(orange,amber,husky,rust,mango,lime)
-private val urbanistFont by lazy { FontFamily(Font(R.font.urbanist,FontWeight.Normal),Font(R.font.urbanist,FontWeight.Medium),Font(R.font.urbanist,FontWeight.SemiBold),Font(R.font.urbanist,FontWeight.Bold)) }
-private val caveatFont by lazy { FontFamily(Font(R.font.caveat)) }
-
-@Composable fun LogbookApp(store:LocalStore){val ctx= LocalContext.current;val prefs=remember{ctx.getSharedPreferences("settings",0)};var name by remember{mutableStateOf(prefs.getString("name","")?:"")};var dark by remember{mutableStateOf(prefs.getBoolean("dark",false))};var low by remember{mutableStateOf(prefs.getBoolean("low",false))};var accent by remember{mutableIntStateOf(prefs.getInt("accent",0))};val bg=if(dark)Color(0xFF1C1813) else cream;val fg=if(dark)Color(0xFFEDE5D5) else ink;var memories by remember{mutableStateOf(store.memories())};var todos by remember{mutableStateOf(store.todos())};var screen by remember{mutableStateOf(if(name.isBlank())"welcome" else "home")};var composer by remember{mutableStateOf(false)};var text by remember{mutableStateOf("")};var previewTags by remember{mutableStateOf(listOf("ideas"))};var attrs by remember{mutableStateOf(emptyList<String>())};var query by remember{mutableStateOf("")};var category by remember{mutableStateOf("all")};var selected by remember{mutableStateOf<Memory?>(null)};var message by remember{mutableStateOf("")};var assistant by remember{mutableStateOf(listOf("Hi $name! I can help find notes, list tasks, or create a todo. Ask me anything."))};var todoInput by remember{mutableStateOf("")};var confirmClear by remember{mutableStateOf(false)};var micState by remember{mutableStateOf("Ready for voice input")};var recognizer by remember{mutableStateOf<SpeechRecognizer?>(null)};val scope= rememberCoroutineScope()
- fun refresh(){memories=store.memories();todos=store.todos()};fun toast(s:String){message=s;scope.launch{delay(2400);message=""}}
- val micPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){granted->if(granted){if(SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx)){val sr=SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx);recognizer=sr;sr.setRecognitionListener(object:RecognitionListener{override fun onReadyForSpeech(p:Bundle?){micState="Listening…"};override fun onBeginningOfSpeech(){};override fun onRmsChanged(r:Float){};override fun onBufferReceived(b:ByteArray?){};override fun onEndOfSpeech(){micState="Finishing…"};override fun onError(e:Int){micState=if(e==SpeechRecognizer.ERROR_NO_MATCH)"No speech detected — try again or type instead" else "Voice unavailable — you can type instead"};override fun onResults(b:Bundle?){text=b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty();micState="Transcript ready"};override fun onPartialResults(b:Bundle?){text=b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?:text};override fun onEvent(t:Int,p:Bundle?){} });sr.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM).putExtra(RecognizerIntent.EXTRA_LANGUAGE,"en-US").putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS,true))}else micState="Offline voice model unavailable on this device — type instead"}else micState="Microphone permission denied — type instead"}
- val export=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")){uri->uri?.let{runCatching{ctx.contentResolver.openOutputStream(it)?.bufferedWriter()?.use{w->w.write(store.export(name))};toast("Private export saved to your chosen location")}.onFailure{toast("Export failed")}}};val import=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->uri?.let{runCatching{val content=ctx.contentResolver.openInputStream(it)!!.bufferedReader().use{r->r.readText()};name=store.import(content,name);prefs.edit().putString("name",name).apply();refresh();toast("Import complete")}.onFailure{toast("Import failed: check the JSON file")}}}
- MaterialTheme(colorScheme=if(dark)darkColorScheme(primary=orange,background=bg,surface=bg,onBackground=fg,onSurface=fg) else lightColorScheme(primary=palette[accent%palette.size],background=bg,surface=bg,onBackground=fg,onSurface=fg),typography=Typography(bodyLarge=androidx.compose.ui.text.TextStyle(fontFamily=urbanistFont))) {
-  BackHandler(screen!="home"&&screen!="welcome"){screen=if(screen=="preview")"compose" else "home";selected=null}
-  Box(Modifier.fillMaxSize().background(bg).imePadding()) { Column(Modifier.fillMaxSize().padding(horizontal=20.dp).padding(top=24.dp)) {
-   Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically){Column{Text("LOGBOOK",fontSize=12.sp,letterSpacing=2.sp,color=orange,fontWeight=FontWeight.Bold);Text("your private mind space",fontSize=12.sp,color=fg.copy(.65f))};if(screen!="welcome")IconButton(onClick={screen="settings"}){Icon(Icons.Rounded.Settings,"Settings",tint=fg)}}
-   Spacer(Modifier.height(20.dp))
-   when(screen){
-    "welcome"->{Spacer(Modifier.height(60.dp));Text("A softer place\nfor your thoughts.",fontSize=36.sp,lineHeight=41.sp,color=fg,fontFamily=caveatFont);Spacer(Modifier.height(18.dp));Text("Before we start — what should I call you?",color=fg);Spacer(Modifier.height(16.dp));InputBox(name,{name=it},"Your name",fg);Spacer(Modifier.height(20.dp));ActionButton("Open Logbook →",orange){if(name.isNotBlank()){name=name.trim();prefs.edit().putString("name",name).apply();screen="intro"}}}
-    "intro"->{Text("What I am",fontSize=30.sp,fontFamily=caveatFont,color=fg);Text("A small, private space to leave yourself a thought. No account. Your writing stays on this device.",color=fg,fontSize=17.sp);Spacer(Modifier.height(24.dp));Text("Why we exist",fontSize=30.sp,fontFamily=caveatFont,color=fg);Text("Capture the things you want to remember, then find them again when you need them.",color=fg,fontSize=17.sp);Spacer(Modifier.height(24.dp));Text("How it works",fontSize=30.sp,fontFamily=caveatFont,color=fg);Text("Write, review your tags, save. Search, todos and your local text helper are always close by.",color=fg,fontSize=17.sp);Spacer(Modifier.weight(1f));ActionButton("Open my Logbook →",orange){screen="home"}}
-    "home"->{Text("Welcome back, ${name.ifBlank{"friend"}}.",fontSize=28.sp,fontFamily=caveatFont,color=fg);Spacer(Modifier.height(18.dp));Card(Modifier.fillMaxWidth().weight(1f).clickable{composer=true;text=""},shape=RoundedCornerShape(24.dp),colors=CardDefaults.cardColors(containerColor=if(low){if(dark)Color(0xFF1C1A08) else Color(0xFFFEF9C3)}else{if(dark)Color(0xCC29241F) else Color(0xDDFEF9C3)}),border=BorderStroke(1.dp,orange.copy(.2f))){Column(Modifier.fillMaxSize().padding(22.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally){Text("✦",fontSize=44.sp,color=orange);Text("Tap to write a thought",fontSize=22.sp,color=ink,fontFamily=caveatFont);Text("A quiet place to put it down.",color=ink.copy(.65f))}}
-      Spacer(Modifier.height(14.dp));Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){listOf("Search","Todos","Assistant","Settings").forEach{label->FilterPill(label,screen==label.lowercase(),fg,orange){screen=label.lowercase()}}};Spacer(Modifier.height(8.dp))}
-    "search"->{Text("Find a thought",fontSize=31.sp,color=fg,fontFamily=caveatFont);Spacer(Modifier.height(8.dp));InputBox(query,{query=it},"Search anything…",fg);Spacer(Modifier.height(10.dp));Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)){listOf("all","ideas","projects","emotions","links","code","life","persons","refs").forEach{FilterPill(if(it=="refs")"Files" else it.replaceFirstChar{c->c.uppercase()},category==it,fg,orange){category=it}}};Spacer(Modifier.height(8.dp));val results=SmartNlp.search(memories,query,category);if(query.isBlank()&&category=="all")Text("Start typing to search your memories",color=fg.copy(.6f))else if(results.isEmpty())Text("Nothing here yet. Try another filter.",color=fg.copy(.6f))else LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(results){m->MemoryCard(m,fg,dark){selected=m}}};Spacer(Modifier.weight(1f));BottomNav(screen,fg,orange){screen=it}}
-    "todos"->{Text("Your Todos",fontSize=31.sp,color=fg,fontFamily=caveatFont);val sorted=todos.sortedWith(compareBy<Todo>{it.completed}.thenBy{if(it.completed)-it.created else it.due?:Long.MAX_VALUE});if(sorted.isEmpty()){Spacer(Modifier.height(36.dp));Text("No todos yet",fontSize=22.sp,color=fg);Text("Say “Remind me to call Sarah tomorrow” in the Assistant to create one.",color=fg.copy(.65f))}else LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(sorted){t->TodoCard(t,fg,orange,{val nt=t.copy(completed=!t.completed);store.saveTodo(nt);refresh()},{store.deleteTodo(t.id);refresh()})}};Spacer(Modifier.weight(1f));BottomNav(screen,fg,orange){screen=it}}
-    "assistant"->{Text("A little help",fontSize=31.sp,color=fg,fontFamily=caveatFont);LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(10.dp)){items(assistant){Text(it,Modifier.fillMaxWidth().background(if(dark)Color(0xFF2A251F) else Color.White.copy(.55f),RoundedCornerShape(16.dp)).padding(14.dp),color=fg)}};InputBox(todoInput,{todoInput=it},"Ask anything…",fg);ActionButton("Send",orange){val q=todoInput.trim();if(q.isNotEmpty()){assistant=assistant+"You: $q";val s=q.lowercase();val answer=when{listOf("remind me","call ","todo","need to").any{s.contains(it)}->{val due=SmartNlp.due(q);val t=Todo(SmartNlp.id("td"),q,due);store.saveTodo(t);scheduleReminder(ctx,t);refresh();"Added to your todos${if(due!=null)" with a local reminder" else ""}."};s.contains("todo")||s.contains("task")->if(todos.isEmpty())"No todos yet — you're all clear." else todos.filter{!it.completed}.joinToString("\n"){"• ${it.text}"};s.contains("find")||s.contains("search")->{val r=SmartNlp.search(memories,q.replace(Regex("(?i)find|search|notes?"),""),"all");if(r.isEmpty())"I couldn't find a matching memory." else r.take(3).joinToString("\n"){it.text}};s in listOf("hi","hello","help")->"I can list your todos, search notes, or create a reminder. Try ‘remind me to call Sarah tomorrow’.";else->"I can help search your saved notes or work with local todos. Try ‘show my todos’ or ‘remind me to call Alex tomorrow’."};assistant=assistant+answer;todoInput=""}};Spacer(Modifier.height(8.dp));BottomNav(screen,fg,orange){screen=it}}
-    "settings"->{Text("Files & Settings",fontSize=31.sp,color=fg,fontFamily=caveatFont);Text("Appearance",fontWeight=FontWeight.Bold,color=fg);Row(verticalAlignment=Alignment.CenterVertically){Text("Dark mode",Modifier.weight(1f),color=fg);Switch(dark,{dark=it;prefs.edit().putBoolean("dark",it).apply()})};Row(verticalAlignment=Alignment.CenterVertically){Text("Low-resource frosted glass",Modifier.weight(1f),color=fg);Switch(low,{low=it;prefs.edit().putBoolean("low",it).apply()})};Text("Soft color",color=fg);Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){palette.forEachIndexed{i,c->Box(Modifier.size(36.dp).clip(RoundedCornerShape(50)).background(c).border(if(accent==i)3.dp else 0.dp,fg,RoundedCornerShape(50)).clickable{accent=i;prefs.edit().putInt("accent",i).apply()}.semanticsLabel("color option ${i+1}"))}}
-      Spacer(Modifier.height(14.dp));Text("Your data — private, on this device",fontWeight=FontWeight.Bold,color=fg);Text("Exports contain your personal writing. Choose a local destination; a document provider may offer cloud locations.",fontSize=13.sp,color=fg.copy(.7f));ActionButton("Export JSON",amber){export.launch("logbook_${java.text.SimpleDateFormat("yyyy-MM-dd",Locale.US).format(Date())}.json")};ActionButton("Import JSON",husky){import.launch(arrayOf("application/json","text/*"))};ActionButton("Delete all memories & todos",rust){confirmClear=true};Spacer(Modifier.height(10.dp));Text("Profile",fontWeight=FontWeight.Bold,color=fg);InputBox(name,{name=it;prefs.edit().putString("name",it).apply()},"Your name",fg);ActionButton("Replay the intro",orange){screen="intro"};Text("Local-first. No account, sync, ads or analytics.",fontSize=12.sp,color=fg.copy(.65f));Spacer(Modifier.weight(1f));BottomNav(screen,fg,orange){screen=it}}
-    "compose"->{Text("Let it land.",fontSize=31.sp,color=fg,fontFamily=caveatFont);Text("Type a thought, or use the microphone if an on-device speech model is available.",fontSize=14.sp,color=fg.copy(.7f));Spacer(Modifier.height(8.dp));InputBox(text,{if(it.length<=2000)text=it},"Dump anything — a link, idea, how you’re feeling…",fg,multiline=true);Text("${text.length}/2000",Modifier.align(Alignment.End),fontSize=12.sp,color=fg.copy(.6f));Text(micState,fontSize=12.sp,color=fg.copy(.65f));Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){ActionButton("Mic",amber){if(Build.VERSION.SDK_INT>=31&&!SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx)){micState="Offline voice model unavailable — type instead"}else micPermission.launch(Manifest.permission.RECORD_AUDIO)};ActionButton("Stop",husky){recognizer?.stopListening();micState="Transcript ready"}};Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){ActionButton("Analyse & Save",orange){if(text.isNotBlank()){val (t,a)=SmartNlp.analyze(text);previewTags=t;attrs=a;screen="preview"}};ActionButton("Use voice instead",husky){micState="Ready for voice input"}};ActionButton("Save as Todo",amber){if(text.isNotBlank()){val t=Todo(SmartNlp.id("td"),text.trim(),SmartNlp.due(text));store.saveTodo(t);scheduleReminder(ctx,t);refresh();text="";composer=false;screen="home";toast("Todo saved")}};ActionButton("Discard",rust){text="";composer=false;screen="home"}}
-    "preview"->{Text("A little scan…",fontSize=31.sp,color=fg,fontFamily=caveatFont);Text("Review before it goes into your logbook.",color=fg.copy(.7f));InputBox(text,{text=it},"Edit your thought",fg,true);Text("Choose tags",color=fg,fontWeight=FontWeight.Bold);FlowTags(SmartNlp.categories,previewTags,fg,orange){k->if(k in previewTags&&previewTags.size>1)previewTags=previewTags-k else if(k !in previewTags)previewTags=previewTags+k};if(attrs.isNotEmpty())Text("Noticed: ${attrs.joinToString(" · ")}",color=fg.copy(.65f),fontSize=13.sp);Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){ActionButton("← Edit",husky){screen="compose"};ActionButton("Save to Logbook",orange){if(text.isNotBlank()){val m=Memory(SmartNlp.id("lb"),text.trim(),previewTags,SmartNlp.analyze(text).second,System.currentTimeMillis());store.save(m);refresh();text="";screen="home";toast("Saved to your logbook")}}};ActionButton("Discard",rust){text="";screen="home"}}
-   }
-  }
-  if(composer&&screen=="home"){LaunchedEffect(composer){screen="compose";composer=false}}
-  selected?.let{m->AlertDialog(onDismissRequest={selected=null},title={Text("A saved thought")},text={Column{Text(m.text);Text(m.tags.joinToString(" · "),color=orange);if(m.attributes.isNotEmpty())Text(m.attributes.joinToString(" · "));Text(SimpleDateFormat("MMM d, yyyy · h:mm a",Locale.getDefault()).format(Date(m.created)),fontSize=12.sp)}} ,confirmButton={TextButton(onClick={selected=null}){Text("Close")}},dismissButton={TextButton(onClick={store.deleteMemory(m.id);refresh();selected=null;toast("Memory deleted")}){Text("Delete")}})}
-  if(confirmClear)AlertDialog(onDismissRequest={confirmClear=false},title={Text("Delete everything?")},text={Text("Delete ALL memories and todos? Cannot undo.")},confirmButton={TextButton(onClick={store.clear();refresh();confirmClear=false;toast("Memories and todos cleared")}){Text("Delete",color=rust)}},dismissButton={TextButton(onClick={confirmClear=false}){Text("Cancel")}})
-  if(message.isNotBlank())Text(message,Modifier.align(Alignment.BottomCenter).padding(bottom=18.dp).background(if(dark)Color(0xFF393129) else Color(0xFF2C2416),RoundedCornerShape(18.dp)).padding(horizontal=18.dp,vertical=10.dp),color=Color.White)
- }
- }
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            val store = remember { LocalStore(applicationContext) }
+            LogbookApp(store)
+        }
+    }
 }
 
-@Composable private fun InputBox(value:String,onChange:(String)->Unit,hint:String,fg:Color,multiline:Boolean=false){Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if(fg==ink)Color.White.copy(.58f) else Color.White.copy(.08f)).border(1.dp,fg.copy(.12f),RoundedCornerShape(16.dp)).padding(14.dp)){if(value.isEmpty())Text(hint,color=fg.copy(.45f),fontSize=15.sp);BasicTextField(value,onChange,Modifier.fillMaxWidth().heightIn(min=if(multiline)100.dp else 24.dp),textStyle=androidx.compose.ui.text.TextStyle(color=fg,fontSize=16.sp),singleLine=!multiline,maxLines=if(multiline)8 else 1)}}
-@Composable private fun ActionButton(label:String,color:Color,onClick:()->Unit){TextButton(onClick=onClick,modifier=Modifier.padding(vertical=3.dp).defaultMinSize(minHeight=48.dp).clip(RoundedCornerShape(14.dp)).background(Brush.linearGradient(listOf(color,color.copy(alpha=.78f)))),contentPadding=PaddingValues(horizontal=16.dp,vertical=10.dp)){Text(label,color=Color.White,fontWeight=FontWeight.SemiBold)}}
-@Composable private fun FilterPill(label:String,selected:Boolean,fg:Color,accent:Color,onClick:()->Unit){TextButton(onClick=onClick,modifier=Modifier.defaultMinSize(minHeight=44.dp).clip(RoundedCornerShape(50)).background(if(selected)accent else fg.copy(.08f)),contentPadding=PaddingValues(horizontal=13.dp,vertical=6.dp)){Text(label,color=if(selected)Color.White else fg,fontSize=12.sp)}}
-@Composable private fun MemoryCard(m:Memory,fg:Color,dark:Boolean,onClick:()->Unit){Card(Modifier.fillMaxWidth().clickable(onClick=onClick),shape=RoundedCornerShape(16.dp),colors=CardDefaults.cardColors(containerColor=if(dark)Color(0xFF29241F) else Color(0xFFEDE8DF))){Column(Modifier.padding(14.dp)){Text(m.text,maxLines=4,color=fg);Spacer(Modifier.height(8.dp));Text(m.tags.joinToString("  ·  "),color=orange,fontSize=12.sp);if(m.attributes.isNotEmpty())Text(m.attributes.joinToString(" · "),fontSize=11.sp,color=fg.copy(.6f))}}}
-@Composable private fun TodoCard(t:Todo,fg:Color,accent:Color,onToggle:()->Unit,onDelete:()->Unit){Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(fg.copy(.06f)).padding(10.dp),verticalAlignment=Alignment.CenterVertically){Checkbox(t.completed,{onToggle()},modifier=Modifier.size(48.dp));Column(Modifier.weight(1f)){Text(t.text,color=fg,textDecoration=if(t.completed)TextDecoration.LineThrough else TextDecoration.None);t.due?.let{Text("Due ${SimpleDateFormat("EEE, MMM d · h a",Locale.getDefault()).format(Date(it))}",fontSize=12.sp,color=accent)}};IconButton(onClick=onDelete,modifier=Modifier.size(48.dp)){Icon(Icons.Rounded.Delete,"Delete todo",tint=fg.copy(.6f))}}}
-@Composable private fun BottomNav(screen:String,fg:Color,accent:Color,onSelect:(String)->Unit){Row(Modifier.fillMaxWidth().padding(bottom=8.dp).clip(RoundedCornerShape(18.dp)).background(fg.copy(.07f)).padding(3.dp),horizontalArrangement=Arrangement.SpaceEvenly){listOf("search" to Icons.Rounded.Search,"todos" to Icons.Rounded.CheckCircle,"assistant" to Icons.Rounded.Chat,"settings" to Icons.Rounded.Settings).forEach{(s,icon)->Column(Modifier.weight(1f).heightIn(min=48.dp).clip(RoundedCornerShape(14.dp)).background(if(screen==s)Brush.horizontalGradient(listOf(accent,amber)) else Brush.horizontalGradient(listOf(Color.Transparent,Color.Transparent)).let{SolidColor(Color.Transparent)}).clickable{onSelect(s)}.padding(vertical=5.dp),horizontalAlignment=Alignment.CenterHorizontally){Icon(icon,s.replaceFirstChar{it.uppercase()},tint=if(screen==s)Color.White else fg.copy(.65f),modifier=Modifier.size(20.dp));Text(s.replaceFirstChar{it.uppercase()},fontSize=10.sp,color=if(screen==s)Color.White else fg.copy(.65f))}}}}
-@Composable private fun FlowTags(items:List<String>,selected:List<String>,fg:Color,accent:Color,onToggle:(String)->Unit){Column{items.chunked(4).forEach{row->Row(horizontalArrangement=Arrangement.spacedBy(4.dp)){row.forEach{k->FilterPill(k.replaceFirstChar{it.uppercase()},k in selected,fg,accent){onToggle(k)}}}}}}
-@Composable private fun Modifier.semanticsLabel(label:String):Modifier=this.semantics{contentDescription=label}
+@Composable
+private fun LogbookApp(store: LocalStore) {
+    val context = LocalContext.current
+    val prefs = remember(context) { context.getSharedPreferences("settings", 0) }
+    var name by remember { mutableStateOf(prefs.getString("name", "").orEmpty()) }
+    var dark by remember { mutableStateOf(prefs.getBoolean("dark", false)) }
+    var reducedEffects by remember { mutableStateOf(prefs.getBoolean("low", false)) }
+    var accentIndex by remember { mutableIntStateOf(prefs.getInt("accent", 0).coerceIn(0, 5)) }
+    var screen by remember { mutableStateOf(if (prefs.getBoolean("onboarded", name.isNotBlank())) LogbookScreen.Home else LogbookScreen.Welcome) }
+    var memories by remember { mutableStateOf(emptyList<Memory>()) }
+    var todos by remember { mutableStateOf(emptyList<Todo>()) }
+    var query by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("all") }
+    var composerText by remember { mutableStateOf("") }
+    var previewTags by remember { mutableStateOf(listOf("ideas")) }
+    var addTaskWithMemory by remember { mutableStateOf(false) }
+    var editingMemory by remember { mutableStateOf<Memory?>(null) }
+    var selectedMemory by remember { mutableStateOf<Memory?>(null) }
+    var confirmMemoryDelete by remember { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
+    var taskDraft by remember { mutableStateOf("") }
+    var assistantDraft by remember { mutableStateOf("") }
+    val chat = remember { mutableStateListOf(ChatLine(false, "I work right here on your device. I can find a thought, show your tasks, or add a reminder when you ask.")) }
+    var banner by remember { mutableStateOf("") }
+    var micStatus by remember { mutableStateOf("Voice is optional; typing always works.") }
+    var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+    val scope = rememberCoroutineScope()
+
+    fun toast(message: String) {
+        scope.launch {
+            banner = message
+            delay(2600)
+            if (banner == message) banner = ""
+        }
+    }
+
+    fun refresh() {
+        scope.launch {
+            val result = withContext(Dispatchers.IO) { store.memories() to store.todos() }
+            memories = result.first
+            todos = result.second
+        }
+    }
+
+    LaunchedEffect(store) {
+        val result = withContext(Dispatchers.IO) { store.memories() to store.todos() }
+        memories = result.first
+        todos = result.second
+    }
+
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            scope.launch(Dispatchers.IO) { LocalStore(context).todos().filter { !it.completed }.forEach { scheduleReminder(context, it) } }
+            toast("Notifications are on for your local reminders")
+        } else toast("Task saved. Allow notifications in Android settings to receive reminders.")
+    }
+    fun askForNotificationsIfNeeded(hasDueTime: Boolean) {
+        if (hasDueTime && Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    fun saveTask(text: String, memoryId: String? = null) {
+        val task = Todo(SmartNlp.id("td"), text.trim(), SmartNlp.due(text), memoryId = memoryId)
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    store.saveTodo(task)
+                    scheduleReminder(context, task)
+                }
+                refresh()
+                askForNotificationsIfNeeded(task.due != null)
+                toast(if (task.due != null) "Task saved with a local reminder" else "Task saved")
+            }.onFailure { toast("Could not save that task") }
+        }
+    }
+
+    fun beginVoiceCapture() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            micStatus = "On-device voice needs Android 12 or later. Type your thought here instead."
+            return
+        }
+        if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
+            micStatus = "No on-device speech model is installed. Your writing stays available below."
+            return
+        }
+        runCatching {
+            recognizer?.destroy()
+            val speech = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+            recognizer = speech
+            speech.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) { micStatus = "Listening on this device…" }
+                override fun onBeginningOfSpeech() { micStatus = "Listening… speak naturally." }
+                override fun onRmsChanged(rmsdB: Float) = Unit
+                override fun onBufferReceived(buffer: ByteArray?) = Unit
+                override fun onEndOfSpeech() { micStatus = "Finishing your words…" }
+                override fun onError(error: Int) {
+                    micStatus = when (error) {
+                        SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "I didn’t catch that. Try again or type instead."
+                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Voice is busy. Wait a moment, then try again."
+                        else -> "Voice isn’t available right now. Your text is still here."
+                    }
+                }
+                override fun onResults(results: Bundle?) {
+                    val heard = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                    if (heard.isNotBlank()) composerText = (composerText + " " + heard).trim().take(2000)
+                    micStatus = if (heard.isBlank()) "No words detected. You can type instead." else "Transcript added. Give it a quick read."
+                }
+                override fun onPartialResults(results: Bundle?) {
+                    val heard = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                    if (heard.isNotBlank()) micStatus = "Hearing: $heard"
+                }
+                override fun onEvent(eventType: Int, params: Bundle?) = Unit
+            })
+            speech.startListening(
+                Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+                    .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                    .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                    .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            )
+        }.onFailure { micStatus = "Voice could not start on this device. Type your thought instead." }
+    }
+
+    val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) beginVoiceCapture() else micStatus = "Microphone permission is off. You can still type your thought."
+    }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(store.export(name)) }
+                        ?: error("Could not open the selected destination")
+                }
+                toast("Private JSON export saved")
+            }.onFailure { toast("Export failed. Your Logbook is unchanged.") }
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            runCatching {
+                val importedName = withContext(Dispatchers.IO) {
+                    val contents = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                        ?: error("Could not read the selected file")
+                    store.import(contents, name)
+                }
+                name = importedName
+                prefs.edit().putString("name", importedName).apply()
+                refresh()
+                toast("Import complete. Existing matching IDs were kept safe.")
+            }.onFailure { toast("Import failed. Check that this is a Logbook JSON file.") }
+        }
+    }
+
+    fun startCapture(existing: Memory? = null) {
+        editingMemory = existing
+        composerText = existing?.text.orEmpty()
+        previewTags = existing?.tags?.ifEmpty { listOf("ideas") } ?: listOf("ideas")
+        addTaskWithMemory = false
+        micStatus = "Voice is optional; typing always works."
+        screen = LogbookScreen.Compose
+    }
+
+    fun saveThought(asTask: Boolean) {
+        val body = composerText.trim()
+        if (body.isBlank()) return
+        val analysis = SmartNlp.analyze(body)
+        val existing = editingMemory
+        val memory = Memory(
+            id = existing?.id ?: SmartNlp.id("lb"), text = body,
+            tags = previewTags.ifEmpty { analysis.first }, attributes = analysis.second,
+            created = existing?.created ?: System.currentTimeMillis()
+        )
+        val task = if (asTask) Todo(SmartNlp.id("td"), SmartNlp.taskText(body), SmartNlp.due(body), memoryId = memory.id) else null
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    if (task == null) store.save(memory) else store.saveAndCreateTodo(memory, task)
+                    if (task != null) scheduleReminder(context, task)
+                }
+                refresh()
+                if (task != null) askForNotificationsIfNeeded(task.due != null)
+                editingMemory = null
+                composerText = ""
+                screen = LogbookScreen.Home
+                toast(if (task == null) "Thought tucked safely away" else "Thought saved and task added")
+            }.onFailure { toast("Could not save this thought") }
+        }
+    }
+
+    fun localAnswer(question: String): String {
+        val q = question.trim()
+        val lower = q.lowercase(Locale.ROOT)
+        if (SmartNlp.isTaskCommand(q)) {
+            val taskText = SmartNlp.taskText(q)
+            if (taskText.isBlank()) return "Tell me what you want to remember, for example: ‘Remind me to call Sam tomorrow.’"
+            saveTask(taskText)
+            val due = SmartNlp.due(taskText)?.let { " for ${formatDue(it)}" }.orEmpty()
+            return "Added ‘$taskText’ to your tasks$due."
+        }
+        if (listOf("my tasks", "show tasks", "show my tasks", "to-do", "todo list").any { lower.contains(it) }) {
+            val open = todos.filterNot { it.completed }
+            return if (open.isEmpty()) "You’re all clear. No open tasks right now."
+            else open.take(8).joinToString("\n") { "• ${it.text}${it.due?.let { due -> " — ${formatDue(due)}" }.orEmpty()}" }
+        }
+        if (listOf("find", "search", "look for", "when did i", "what did i write", "show me").any { lower.contains(it) }) {
+            val term = q.replace(Regex("(?i)^(find|search(?: for)?|look for|show me|when did i|what did i write about)\\s*"), "")
+                .replace(Regex("(?i)^(a |the )?(note|memory|thought)s?\\s*(about )?"), "").trim()
+            val matches = SmartNlp.search(memories, term, "all")
+            return if (matches.isEmpty()) "I couldn’t find a matching thought. Try a different word or open Search to browse by category."
+            else matches.take(3).joinToString("\n\n") { "“${it.text.take(180)}${if (it.text.length > 180) "…" else ""}”" }
+        }
+        if (lower.contains("today") || lower.contains("captured") || lower.contains("summary")) {
+            val todayCount = memories.count { isToday(it.created) }
+            val openTasks = todos.count { !it.completed }
+            return "Today you’ve caught $todayCount ${if (todayCount == 1) "thought" else "thoughts"}. You have $openTasks open ${if (openTasks == 1) "task" else "tasks"}. Everything stays on this device."
+        }
+        if (lower in listOf("hi", "hello", "help", "what can you do?")) return "I can search saved thoughts, show open tasks, or add a task when you say ‘Remind me to…’. I don’t use a cloud AI."
+        return "I’m a small local helper, not a cloud AI. Try ‘Find my notes about ideas’, ‘Show my tasks’, or ‘Remind me to call Alex tomorrow.’"
+    }
+
+    BackHandler(enabled = screen != LogbookScreen.Home && screen != LogbookScreen.Welcome) {
+        screen = when (screen) {
+            LogbookScreen.Preview -> LogbookScreen.Compose
+            LogbookScreen.Compose -> LogbookScreen.Home
+            LogbookScreen.Intro -> LogbookScreen.Welcome
+            else -> LogbookScreen.Home
+        }
+    }
+    DisposableEffect(Unit) { onDispose { recognizer?.destroy() } }
+
+    LogbookTheme(dark, accentIndex, reducedEffects) {
+        SideEffect {
+            (context as? ComponentActivity)?.window?.let { window ->
+                WindowCompat.setDecorFitsSystemWindows(window, false)
+                window.statusBarColor = MaterialTheme.colorScheme.background.toArgb()
+                window.navigationBarColor = MaterialTheme.colorScheme.background.toArgb()
+                val bars = WindowCompat.getInsetsController(window, window.decorView)
+                bars.isAppearanceLightStatusBars = !dark
+                bars.isAppearanceLightNavigationBars = !dark
+            }
+        }
+        LogbookBackdrop {
+            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding()) {
+                when (screen) {
+                    LogbookScreen.Welcome -> WelcomeScreen(name, { name = it.take(40) }) {
+                        name = name.trim()
+                        prefs.edit().putString("name", name).apply()
+                        screen = LogbookScreen.Intro
+                    }
+                    LogbookScreen.Intro -> IntroScreen {
+                        prefs.edit().putBoolean("onboarded", true).apply()
+                        screen = LogbookScreen.Home
+                    }
+                    LogbookScreen.Compose -> ComposerScreen(
+                        text = composerText,
+                        onText = { composerText = it.take(2000) },
+                        onBack = { screen = LogbookScreen.Home },
+                        onAnalyze = {
+                            val detected = SmartNlp.analyze(composerText).first
+                            previewTags = editingMemory?.tags?.ifEmpty { detected } ?: detected
+                            addTaskWithMemory = SmartNlp.taskCandidate(composerText)
+                            screen = LogbookScreen.Preview
+                        },
+                        onMic = {
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) micStatus = "On-device voice needs Android 12 or later. Type your thought instead."
+                            else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+                        },
+                        onStop = { recognizer?.stopListening(); micStatus = "Transcript ready to review." },
+                        micStatus = micStatus
+                    )
+                    LogbookScreen.Preview -> PreviewScreen(
+                        text = composerText,
+                        onText = { composerText = it.take(2000) },
+                        tags = previewTags,
+                        onToggleTag = { tag -> previewTags = if (tag in previewTags) { if (previewTags.size > 1) previewTags - tag else previewTags } else previewTags + tag },
+                        taskSuggested = SmartNlp.taskCandidate(composerText),
+                        addTask = addTaskWithMemory,
+                        onAddTask = { addTaskWithMemory = it },
+                        onBack = { screen = LogbookScreen.Compose },
+                        onSave = { saveThought(addTaskWithMemory) }
+                    )
+                    else -> Column(Modifier.fillMaxSize()) {
+                        BrandBar(name) { screen = LogbookScreen.Settings }
+                        AnimatedContent(
+                            targetState = screen,
+                            modifier = Modifier.weight(1f),
+                            transitionSpec = { fadeIn() togetherWith fadeOut() },
+                            label = "logbook-screen"
+                        ) { route ->
+                            when (route) {
+                                LogbookScreen.Home -> HomeScreen(name, memories, todos, { startCapture() }, { selectedMemory = it }, { screen = LogbookScreen.Search })
+                                LogbookScreen.Search -> SearchScreen(memories, query, { query = it }, category, { category = it }, { selectedMemory = it })
+                                LogbookScreen.Tasks -> TasksScreen(
+                                    todos, taskDraft, { taskDraft = it },
+                                    { if (taskDraft.isNotBlank()) { saveTask(taskDraft); taskDraft = "" } },
+                                    { task ->
+                                        val updated = task.copy(completed = !task.completed)
+                                        scope.launch {
+                                            withContext(Dispatchers.IO) {
+                                                store.saveTodo(updated)
+                                                if (updated.completed) cancelReminder(context, updated.id) else scheduleReminder(context, updated)
+                                            }
+                                            refresh()
+                                        }
+                                    },
+                                    { task -> scope.launch { withContext(Dispatchers.IO) { cancelReminder(context, task.id); store.deleteTodo(task.id) }; refresh(); toast("Task removed") } }
+                                )
+                                LogbookScreen.Guide -> GuideScreen(chat, assistantDraft, { assistantDraft = it }) {
+                                    val question = assistantDraft.trim()
+                                    if (question.isNotBlank()) {
+                                        chat.add(ChatLine(true, question))
+                                        chat.add(ChatLine(false, localAnswer(question)))
+                                        assistantDraft = ""
+                                    }
+                                }
+                                LogbookScreen.Settings -> SettingsScreen(
+                                    name = name,
+                                    onName = { value -> name = value.take(40); prefs.edit().putString("name", name).apply() },
+                                    dark = dark,
+                                    onDark = { value -> dark = value; prefs.edit().putBoolean("dark", value).apply() },
+                                    reducedEffects = reducedEffects,
+                                    onReducedEffects = { value -> reducedEffects = value; prefs.edit().putBoolean("low", value).apply() },
+                                    accentIndex = accentIndex,
+                                    onAccent = { value -> accentIndex = value; prefs.edit().putInt("accent", value).apply() },
+                                    onExport = { exportLauncher.launch("logbook_${SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())}.json") },
+                                    onImport = { importLauncher.launch(arrayOf("application/json", "text/*")) },
+                                    onClear = { confirmClear = true },
+                                    onIntro = { screen = LogbookScreen.Intro }
+                                )
+                                else -> Unit
+                            }
+                        }
+                        BottomNavigation(screen, MaterialTheme.colorScheme.primary) { screen = it }
+                    }
+                }
+            }
+            if (banner.isNotBlank()) Text(
+                banner,
+                Modifier.align(Alignment.BottomCenter).padding(horizontal = 24.dp, vertical = 18.dp)
+                    .clip(MaterialTheme.shapes.medium).background(if (dark) Color(0xFF40372E) else Color(0xFF2C241D))
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                color = androidx.compose.ui.graphics.Color.White,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+
+        selectedMemory?.let { memory ->
+            AlertDialog(
+                onDismissRequest = { selectedMemory = null },
+                title = { Text("A thought you kept", fontFamily = LogbookHand, fontSize = 27.sp) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(memory.text, style = MaterialTheme.typography.bodyLarge)
+                        Text(memory.tags.joinToString("  · ") { LogbookCategories[it] ?: it }, color = MaterialTheme.colorScheme.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                        if (memory.attributes.isNotEmpty()) Text(memory.attributes.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        Text(formatDate(memory.created), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    }
+                },
+                confirmButton = {
+                    Row {
+                        TextButton(onClick = { selectedMemory = null; startCapture(memory) }) { Text("Edit") }
+                        TextButton(onClick = { selectedMemory = null }) { Text("Done") }
+                    }
+                },
+                dismissButton = { TextButton(onClick = { confirmMemoryDelete = true }) { Text("Delete", color = MaterialTheme.colorScheme.error) } }
+            )
+        }
+        if (confirmMemoryDelete) AlertDialog(
+            onDismissRequest = { confirmMemoryDelete = false },
+            title = { Text("Let this thought go?") },
+            text = { Text("This removes the saved thought. Any linked task will stay, but will no longer point back to it.") },
+            confirmButton = { TextButton(onClick = {
+                selectedMemory?.id?.let { id -> scope.launch { withContext(Dispatchers.IO) { store.deleteMemory(id) }; refresh(); toast("Thought deleted") } }
+                selectedMemory = null
+                confirmMemoryDelete = false
+            }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { confirmMemoryDelete = false }) { Text("Keep it") } }
+        )
+        if (confirmClear) AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("Clear your Logbook?") },
+            text = { Text("All saved thoughts and tasks on this device will be deleted. Export a JSON copy first if you may want them later.") },
+            confirmButton = { TextButton(onClick = {
+                confirmClear = false
+                scope.launch {
+                    withContext(Dispatchers.IO) { cancelAllReminders(context, todos); store.clear() }
+                    memories = emptyList()
+                    todos = emptyList()
+                    toast("Your local Logbook is clear")
+                }
+            }) { Text("Delete everything", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } }
+        )
+    }
+}
