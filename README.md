@@ -16,7 +16,7 @@ The **Build debug APK** GitHub Actions workflow builds `app-debug.apk` on pushes
 
 ## Design
 
-Warm paper/ink foundation with amber, pumpkin orange, husky grey, rust, mango/blush and lime accents; 18/12/8dp-like rounded hierarchy; responsive system text sizing; a low-resource frosted-glass preference (flat translucent surfaces instead of blur); and offline font role intent of Urbanist for body and Caveat for display headings. Font assets can be added under OFL after their first build verification.
+Warm paper/ink foundation with amber, pumpkin orange, husky grey, rust, mango/blush and lime accents; 18/12/8dp-like rounded hierarchy; responsive system text sizing; a low-resource frosted-glass preference (flat translucent surfaces instead of blur); and bundled Urbanist body and Caveat display fonts (SIL Open Font License).
 
 ## Status and scope
 
