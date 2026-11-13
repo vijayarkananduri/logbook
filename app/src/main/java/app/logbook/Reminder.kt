@@ -50,11 +50,12 @@ class ReminderReceiver : BroadcastReceiver() {
             )
         }
         val text = intent.getStringExtra("text")?.take(140) ?: "A note to yourself is ready."
-        val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(context, "logbook_reminders")
         } else {
-            @Suppress("DEPRECATION") Notification.Builder(context)
-        }.setSmallIcon(R.drawable.ic_logbook)
+            Notification.Builder(context)
+        }
+        val notification = builder.setSmallIcon(R.drawable.ic_logbook)
             .setContentTitle("A note to yourself")
             .setContentText(text)
             .setAutoCancel(true)
