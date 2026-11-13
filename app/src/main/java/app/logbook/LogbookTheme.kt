@@ -157,7 +157,7 @@ internal fun DewSurface(
             .shadow(if (reduced) 0.dp else 9.dp, shape, clip = false)
             .clip(shape)
             .then(if (onClick != null) Modifier.clickable(source, indication = null, role = Role.Button, onClick = onClick) else Modifier)
-            .background(if (reduced) base else Brush.verticalGradient(listOf(sheen, base, depth)), shape)
+            .then(if (reduced) Modifier.background(base, shape) else Modifier.background(Brush.verticalGradient(listOf(sheen, base, depth)), shape))
             .border(BorderStroke(1.dp, rim), shape)
     ) {
         if (!reduced) Box(Modifier.align(Alignment.TopCenter).fillMaxWidth(0.72f).height(2.dp).padding(horizontal = 24.dp).clip(CircleShape).background(Brush.horizontalGradient(listOf(Color.Transparent, sheen, Color.Transparent))))
