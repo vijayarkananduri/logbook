@@ -8,6 +8,11 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -279,11 +284,12 @@ private fun LogbookApp(store: LocalStore) {
     DisposableEffect(Unit) { onDispose { recognizer?.destroy() } }
 
     LogbookTheme(dark, accentIndex, reducedEffects) {
+        val systemBarColor = MaterialTheme.colorScheme.background.toArgb()
         SideEffect {
             (context as? ComponentActivity)?.window?.let { window ->
                 WindowCompat.setDecorFitsSystemWindows(window, false)
-                window.statusBarColor = MaterialTheme.colorScheme.background.toArgb()
-                window.navigationBarColor = MaterialTheme.colorScheme.background.toArgb()
+                window.statusBarColor = systemBarColor
+                window.navigationBarColor = systemBarColor
                 val bars = WindowCompat.getInsetsController(window, window.decorView)
                 bars.isAppearanceLightStatusBars = !dark
                 bars.isAppearanceLightNavigationBars = !dark
