@@ -18,7 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.graphicsLayer
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -148,7 +148,7 @@ internal fun DewSurface(
     val reduced = LocalReducedEffects.current
     val scale by animateFloatAsState(if (pressed && onClick != null) 0.985f else 1f, spring(dampingRatio = 0.72f, stiffness = 420f), label = "dew-press")
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val base = tone.copy(alpha = if (reduced) 0.97f else 0.92f)
+    val base = tone.compositeOver(MaterialTheme.colorScheme.surface).copy(alpha = if (reduced) 0.97f else 0.92f)
     val sheen = if (dark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.84f)
     val depth = if (dark) Color.Black.copy(alpha = 0.20f) else Color(0xFFE6DCCE).copy(alpha = 0.50f)
     val rim = if (dark) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.95f)
