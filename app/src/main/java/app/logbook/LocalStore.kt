@@ -38,7 +38,7 @@ private object KeyVault {
 
 class LocalStore(ctx:Context):SQLiteOpenHelper(ctx.applicationContext,"logbook.db",null,1){
     private val app=ctx.applicationContext
-    private val pass=KeyVault.passphrase(app)
+    private val pass=android.util.Base64.encodeToString(KeyVault.passphrase(app),android.util.Base64.NO_WRAP)
     init{SQLiteDatabase.loadLibs(app)}
     override fun onCreate(db:SQLiteDatabase){db.execSQL("CREATE TABLE memories(id TEXT PRIMARY KEY,text TEXT NOT NULL,tags TEXT NOT NULL,attrs TEXT NOT NULL,created INTEGER NOT NULL)");db.execSQL("CREATE TABLE todos(id TEXT PRIMARY KEY,text TEXT NOT NULL,due INTEGER,category TEXT NOT NULL,completed INTEGER NOT NULL,created INTEGER NOT NULL,memoryId TEXT)")}
     override fun onUpgrade(db:SQLiteDatabase,o:Int,n:Int){}
