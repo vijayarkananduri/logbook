@@ -1,6 +1,8 @@
 package app.logbook
 
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -42,8 +44,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Calendar
 import java.util.Locale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun WelcomeScreen(name: String, onName: (String) -> Unit, onContinue: () -> Unit) {
@@ -71,21 +75,13 @@ internal fun WelcomeScreen(name: String, onName: (String) -> Unit, onContinue: (
 
 @Composable
 internal fun IntroScreen(onStart: () -> Unit) {
-    val features = listOf(
-        Triple(Icons.Rounded.EditNote, "Catch the whole thought", "Save fragments, plans, links, feelings, and reminders. Write freely first; decide what matters after."),
-        Triple(Icons.Rounded.AutoAwesome, "Get several useful tags", "Local phrase rules can suggest more than one shelf at once. Review each suggestion, keep what fits, and add your own labels."),
-        Triple(Icons.Rounded.Search, "Find ideas by words or tags", "Search checks note text, labels, people, links, and dates. Tap a tag to browse the notes on that shelf."),
-        Triple(Icons.Rounded.Hub, "Notice what connects", "People, projects, and recurring topics gather into hubs as your notes grow."),
-        Triple(Icons.Rounded.CheckCircle, "Turn a thought into a next step", "Task wording and dates can suggest a reminder. Nothing is scheduled until you choose to save it."),
-        Triple(Icons.Rounded.Lock, "Keep it on this device", "Your notes stay in the encrypted local database. Tagging and chat use predictable on-device rules, not a cloud AI.")
+    val pages = listOf(
+        listOf(Triple(Icons.Rounded.EditNote, "Catch the whole thought", "Write or speak freely. A messy first draft is welcome."), Triple(Icons.Rounded.AutoAwesome, "Keep useful shelves", "Local rules suggest labels; you decide what stays.")),
+        listOf(Triple(Icons.Rounded.Search, "Find it again", "Search words, links, people, dates, and labels."), Triple(Icons.Rounded.Hub, "See what connects", "People, projects, and recurring topics gather into hubs.")),
+        listOf(Triple(Icons.Rounded.CheckCircle, "Move one thing forward", "Turn clear next steps into dated local task notifications."), Triple(Icons.Rounded.Lock, "Keep it on this device", "Your writing stays in an encrypted local database—not a cloud AI."))
     )
-    var revealed by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
-        features.indices.forEach { index ->
-            delay(90)
-            revealed = index + 1
-        }
-    }
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+    val pagerScope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.logbook_logo), "logbook logo", Modifier.size(48.dp))
@@ -96,16 +92,24 @@ internal fun IntroScreen(onStart: () -> Unit) {
             }
         }
         Spacer(Modifier.height(9.dp))
-        Text("Catch it now. Let logbook help you connect and find it later.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Three small chapters, then you’re in.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(14.dp))
-        features.forEachIndexed { index, feature ->
-            AnimatedVisibility(visible = index < revealed, enter = fadeIn(tween(260)) + slideInVertically(tween(260)) { it / 5 }) {
-                IntroCard(feature.first, feature.second, feature.third)
+        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxWidth().height(300.dp)) { page ->
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                pages[page].forEach { feature -> IntroCard(feature.first, feature.second, feature.third) }
             }
-            if (index < features.lastIndex) Spacer(Modifier.height(8.dp))
         }
-        Spacer(Modifier.height(16.dp))
-        PrimaryAction("Open logbook", MaterialTheme.colorScheme.primary, onStart)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            repeat(pages.size) { page ->
+                Text("●", color = if (pagerState.currentPage == page) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(horizontal = 4.dp))
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        if (pagerState.currentPage < pages.lastIndex) {
+            PrimaryAction("Next", MaterialTheme.colorScheme.primary, { pagerScope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) } })
+        } else {
+            PrimaryAction("Open logbook", MaterialTheme.colorScheme.primary, onStart)
+        }
     }
 }
 
@@ -125,7 +129,7 @@ private fun IntroCard(icon: androidx.compose.ui.graphics.vector.ImageVector, tit
 }
 
 @Composable
-internal fun HomeScreen(name: String, memories: List<Memory>, todos: List<Todo>, onMemory: (Memory) -> Unit, onDelete: (Memory) -> Unit, onSearch: () -> Unit, onTasks: () -> Unit, onToggleTask: (Todo) -> Unit, onTagClick: (String) -> Unit) {
+internal fun HomeScreen(name: String, memories: List<Memory>, todos: List<Todo>, showRecentNotes: Boolean, onMemory: (Memory) -> Unit, onDelete: (Memory) -> Unit, onSearch: () -> Unit, onTasks: () -> Unit, onToggleTask: (Todo) -> Unit, onTagClick: (String) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp).padding(bottom = 88.dp)) {
         Text(greeting(name), fontFamily = LogbookHand, fontSize = 34.sp, lineHeight = 40.sp, color = MaterialTheme.colorScheme.onBackground)
         Text(SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(Date()), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -156,12 +160,12 @@ internal fun HomeScreen(name: String, memories: List<Memory>, todos: List<Todo>,
                 }
             }
         }
-        Spacer(Modifier.height(22.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (showRecentNotes) Spacer(Modifier.height(22.dp))
+        if (showRecentNotes) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Recent thoughts", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
             TextButton(onClick = onSearch, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) { Text("See all") }
         }
-        if (memories.isEmpty()) {
+        if (showRecentNotes && memories.isEmpty()) {
             DewSurface(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(19.dp)) {
                     Text("A fresh page.", fontFamily = LogbookHand, fontSize = 27.sp, color = MaterialTheme.colorScheme.onSurface)
@@ -169,7 +173,7 @@ internal fun HomeScreen(name: String, memories: List<Memory>, todos: List<Todo>,
                     Text("Use the + button whenever you want to save a thought.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-        } else memories.take(5).forEachIndexed { index, memory ->
+        } else if (showRecentNotes) memories.take(5).forEachIndexed { index, memory ->
             if (index > 0) Spacer(Modifier.height(10.dp))
             MemoryCard(memory, { onMemory(memory) }, { onDelete(memory) }, onTagClick)
         }
@@ -291,16 +295,27 @@ private fun HubCard(hub: EntityHub, onClick: () -> Unit) {
 }
 
 @Composable
-internal fun TasksScreen(todos: List<Todo>, draft: String, onDraft: (String) -> Unit, onAdd: () -> Unit, onToggle: (Todo) -> Unit, onDelete: (Todo) -> Unit) {
+internal fun TasksScreen(todos: List<Todo>, draft: String, draftDue: Long?, onDraft: (String) -> Unit, onDraftDue: (Long?) -> Unit, onAdd: () -> Unit, onToggle: (Todo) -> Unit, onDelete: (Todo) -> Unit) {
     val ordered = todos.sortedWith(compareBy<Todo> { it.completed }.thenBy { it.due ?: Long.MAX_VALUE }.thenByDescending { it.created })
+    var showCalendar by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = draftDue ?: System.currentTimeMillis())
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp)) {
         Text("Things in motion", fontFamily = LogbookHand, fontSize = 32.sp, color = MaterialTheme.colorScheme.onBackground)
         Text("A gentle place for what comes next.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(13.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             EntryField(draft, onDraft, "Add a task — call Sam tomorrow", false, 50.dp, Modifier.weight(1f))
+            IconButton(onClick = { showCalendar = true }, modifier = Modifier.size(50.dp)) {
+                Icon(Icons.Rounded.CalendarMonth, "Choose task date", tint = MaterialTheme.colorScheme.primary)
+            }
             IconButton(onClick = onAdd, modifier = Modifier.size(50.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)) {
                 Icon(Icons.Rounded.Add, "Add task", tint = MaterialTheme.colorScheme.onPrimary)
+            }
+        }
+        draftDue?.let { due ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Due ${formatDue(due)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                TextButton(onClick = { onDraftDue(null) }) { Text("Clear date") }
             }
         }
         Spacer(Modifier.height(13.dp))
@@ -310,6 +325,17 @@ internal fun TasksScreen(todos: List<Todo>, draft: String, onDraft: (String) -> 
             items(ordered, key = { it.id }) { task -> TodoCard(task, { onToggle(task) }, { onDelete(task) }) }
         }
     }
+    if (showCalendar) DatePickerDialog(
+        onDismissRequest = { showCalendar = false },
+        confirmButton = { TextButton(onClick = {
+            datePickerState.selectedDateMillis?.let { millis ->
+                val picked = Calendar.getInstance().apply { timeInMillis = millis; set(Calendar.HOUR_OF_DAY, 9); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
+                onDraftDue(picked)
+            }
+            showCalendar = false
+        }) { Text("Choose") } },
+        dismissButton = { TextButton(onClick = { showCalendar = false }) { Text("Cancel") } }
+    ) { DatePicker(state = datePickerState) }
 }
 
 @Composable
@@ -342,6 +368,7 @@ internal fun SettingsScreen(
     name: String, onName: (String) -> Unit, themeMode: String, onThemeMode: (String) -> Unit,
     morningEnabled: Boolean, eveningEnabled: Boolean, morningTime: String, eveningTime: String,
     onMorningEnabled: (Boolean) -> Unit, onEveningEnabled: (Boolean) -> Unit, onMorningTime: () -> Unit, onEveningTime: () -> Unit,
+    showRecentNotes: Boolean, onShowRecentNotes: (Boolean) -> Unit, onHelp: () -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onClear: () -> Unit, onIntro: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, vertical = 7.dp)) {
@@ -369,6 +396,10 @@ internal fun SettingsScreen(
             TextButton(onClick = onEveningTime, modifier = Modifier.fillMaxWidth(), enabled = eveningEnabled) { Text("Evening time · $eveningTime") }
         }
         Spacer(Modifier.height(4.dp))
+        SettingsGroup("Home") {
+            SettingToggle(Icons.Rounded.StickyNote2, "Show recent thoughts", "Hide this block when Home feels too busy.", showRecentNotes, onShowRecentNotes)
+        }
+        Spacer(Modifier.height(4.dp))
         SettingsGroup("Your writing stays yours") {
             Text("Thoughts are stored in an encrypted database on this device. logbook has no account, network AI, sync, ads or analytics. JSON files contain private writing; choose a destination you trust.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(5.dp))
@@ -384,6 +415,8 @@ internal fun SettingsScreen(
         Spacer(Modifier.height(4.dp))
         SettingsGroup("About logbook") {
             Text("A private mind space. Local-first by design; voice uses only Android’s on-device recognizer when available.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(2.dp))
+            SecondaryAction("Open the Help guide", Icons.Rounded.MenuBook, onHelp, Modifier.fillMaxWidth())
             Spacer(Modifier.height(2.dp))
             TextButton(onClick = onIntro, modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)) { Text("See the welcome again") }
         }

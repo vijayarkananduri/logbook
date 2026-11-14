@@ -2,6 +2,7 @@ package app.logbook
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -68,6 +69,7 @@ private fun LogbookApp(store: LocalStore) {
     var morningMinute by remember { mutableIntStateOf(prefs.getInt("morning_minute", 0)) }
     var eveningHour by remember { mutableIntStateOf(prefs.getInt("evening_hour", 20)) }
     var eveningMinute by remember { mutableIntStateOf(prefs.getInt("evening_minute", 0)) }
+    var showRecentNotes by remember { mutableStateOf(prefs.getBoolean("show_recent_notes", true)) }
     var onboardingPermissionFlow by remember { mutableStateOf(false) }
     var requestMicrophoneAfterNotification by remember { mutableStateOf(false) }
     val dark = when (themeMode) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
@@ -88,6 +90,7 @@ private fun LogbookApp(store: LocalStore) {
     var taskToDelete by remember { mutableStateOf<Todo?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     var taskDraft by remember { mutableStateOf("") }
+    var taskDraftDue by remember { mutableStateOf<Long?>(null) }
     var assistantDraft by remember { mutableStateOf("") }
     val chat = remember { mutableStateListOf(ChatLine(false, "I work right here on your device. I can find a thought, show your tasks, or add a reminder when you ask.")) }
     var banner by remember { mutableStateOf("") }
@@ -143,8 +146,8 @@ private fun LogbookApp(store: LocalStore) {
         ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
-    fun saveTask(text: String, memoryId: String? = null) {
-        val task = Todo(SmartNlp.id("td"), text.trim(), SmartNlp.due(text), memoryId = memoryId)
+    fun saveTask(text: String, memoryId: String? = null, dueOverride: Long? = null) {
+        val task = Todo(SmartNlp.id("td"), text.trim(), dueOverride ?: SmartNlp.due(text), memoryId = memoryId)
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -426,15 +429,15 @@ private fun LogbookApp(store: LocalStore) {
                             BrandBar { screen = LogbookScreen.Guide }
                             AnimatedContent(targetState = screen, modifier = Modifier.weight(1f), transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "logbook-screen") { route ->
                                 when (route) {
-                                    LogbookScreen.Home -> HomeScreen(name, memories, todos, { selectedMemory = it }, { memoryToDelete = it },
+                                    LogbookScreen.Home -> HomeScreen(name, memories, todos, showRecentNotes, { selectedMemory = it }, { memoryToDelete = it },
                                         { query = ""; category = "all"; screen = LogbookScreen.Search }, { screen = LogbookScreen.Tasks },
                                         { task -> val updated = task.copy(completed = true); scope.launch {
                                             withContext(Dispatchers.IO) { store.saveTodo(updated); cancelReminder(context, updated.id) }; refresh()
                                         } }, { tag -> query = ""; category = tag; screen = LogbookScreen.Search })
                                     LogbookScreen.Search -> SearchScreen(memories, query, { query = it }, category, { category = it }, { selectedMemory = it }, { memoryToDelete = it })
                                     LogbookScreen.Hubs -> HubsScreen(memories, selectedHub, { selectedHub = it }, { selectedMemory = it })
-                                    LogbookScreen.Tasks -> TasksScreen(todos, taskDraft, { taskDraft = it },
-                                        { if (taskDraft.isNotBlank()) { saveTask(taskDraft); taskDraft = "" } },
+                                    LogbookScreen.Tasks -> TasksScreen(todos, taskDraft, taskDraftDue, { taskDraft = it }, { taskDraftDue = it },
+                                        { if (taskDraft.isNotBlank()) { saveTask(taskDraft, dueOverride = taskDraftDue); taskDraft = ""; taskDraftDue = null } },
                                         { task -> val updated = task.copy(completed = !task.completed); scope.launch {
                                             withContext(Dispatchers.IO) { store.saveTodo(updated); if (updated.completed) cancelReminder(context, updated.id) else scheduleReminder(context, updated) }; refresh()
                                         } }, { task -> taskToDelete = task })
@@ -451,6 +454,9 @@ private fun LogbookApp(store: LocalStore) {
                                         onMorningEnabled = { value -> morningEnabled = value; prefs.edit().putBoolean("morning_enabled", value).apply(); scheduleFriendlyNudge(context, "morning", morningHour, morningMinute, value) },
                                         onEveningEnabled = { value -> eveningEnabled = value; prefs.edit().putBoolean("evening_enabled", value).apply(); scheduleFriendlyNudge(context, "evening", eveningHour, eveningMinute, value) },
                                         onMorningTime = { pickNudgeTime("morning") }, onEveningTime = { pickNudgeTime("evening") },
+                                        showRecentNotes = showRecentNotes,
+                                        onShowRecentNotes = { value -> showRecentNotes = value; prefs.edit().putBoolean("show_recent_notes", value).apply() },
+                                        onHelp = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://thelogbook.netlify.app/guide.html"))) } },
                                         onExport = { exportLauncher.launch("logbook_${SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())}.json") },
                                         onImport = { importLauncher.launch(arrayOf("application/json", "text/*")) }, onClear = { confirmClear = true }, onIntro = { screen = LogbookScreen.Intro })
                                     else -> Unit
