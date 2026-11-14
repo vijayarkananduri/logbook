@@ -330,13 +330,11 @@ internal fun TasksScreen(todos: List<Todo>, draft: String, draftDue: Long?, onDr
     if (showCalendar) DatePickerDialog(
         onDismissRequest = { showCalendar = false },
         confirmButton = { TextButton(onClick = {
-            datePickerState.selectedDateMillis?.let { millis ->
-                val picked = Calendar.getInstance().apply { timeInMillis = millis; set(Calendar.HOUR_OF_DAY, 9); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
-                onDraftDue(picked)
-                if (saveAfterDateChoice) onAdd(picked)
-            } else {
-                if (saveAfterDateChoice) onAdd(null)
+            val picked = datePickerState.selectedDateMillis?.let { millis ->
+                Calendar.getInstance().apply { timeInMillis = millis; set(Calendar.HOUR_OF_DAY, 9); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
             }
+            picked?.let(onDraftDue)
+            if (saveAfterDateChoice) onAdd(picked)
             saveAfterDateChoice = false
             showCalendar = false
         }) { Text("Save task") } },
