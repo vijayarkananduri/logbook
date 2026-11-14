@@ -1,7 +1,7 @@
 package app.logbook
 
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.pointerInput
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
