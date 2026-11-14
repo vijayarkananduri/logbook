@@ -201,7 +201,7 @@ private fun SwipeToDeleteCard(id: String, onDelete: () -> Unit, content: @Compos
     Box(Modifier.fillMaxWidth()) {
         Row(Modifier.matchParentSize().clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = 8.dp),
             horizontalArrangement = if (offsetX > 0f) Arrangement.Start else Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onDelete, colors = TextButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+            TextButton(onClick = onDelete) {
                 Icon(Icons.Rounded.DeleteOutline, null); Spacer(Modifier.width(4.dp)); Text("Delete")
             }
         }
