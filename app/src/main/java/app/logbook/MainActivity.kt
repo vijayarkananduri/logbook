@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.app.TimePickerDialog
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -61,6 +62,12 @@ private fun LogbookApp(store: LocalStore) {
         mutableStateOf(prefs.getString("theme_mode", null)?.takeIf { it in setOf("system", "light", "dark") }
             ?: if (prefs.getBoolean("dark", false)) "dark" else "system")
     }
+    var morningEnabled by remember { mutableStateOf(prefs.getBoolean("morning_enabled", true)) }
+    var eveningEnabled by remember { mutableStateOf(prefs.getBoolean("evening_enabled", true)) }
+    var morningHour by remember { mutableIntStateOf(prefs.getInt("morning_hour", 8)) }
+    var morningMinute by remember { mutableIntStateOf(prefs.getInt("morning_minute", 0)) }
+    var eveningHour by remember { mutableIntStateOf(prefs.getInt("evening_hour", 20)) }
+    var eveningMinute by remember { mutableIntStateOf(prefs.getInt("evening_minute", 0)) }
     val dark = when (themeMode) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
     var screen by remember { mutableStateOf(if (prefs.getBoolean("onboarded", name.isNotBlank())) LogbookScreen.Home else LogbookScreen.Welcome) }
     var memories by remember { mutableStateOf(emptyList<Memory>()) }
@@ -106,6 +113,19 @@ private fun LogbookApp(store: LocalStore) {
         val result = withContext(Dispatchers.IO) { store.memories() to store.todos() }
         memories = result.first
         todos = result.second
+        scheduleFriendlyNudge(context, "morning", morningHour, morningMinute, morningEnabled)
+        scheduleFriendlyNudge(context, "evening", eveningHour, eveningMinute, eveningEnabled)
+    }
+
+    fun pickNudgeTime(kind: String) {
+        val hour = if (kind == "morning") morningHour else eveningHour
+        val minute = if (kind == "morning") morningMinute else eveningMinute
+        TimePickerDialog(context, { _, selectedHour, selectedMinute ->
+            if (kind == "morning") { morningHour = selectedHour; morningMinute = selectedMinute }
+            else { eveningHour = selectedHour; eveningMinute = selectedMinute }
+            prefs.edit().putInt("${kind}_hour", selectedHour).putInt("${kind}_minute", selectedMinute).apply()
+            scheduleFriendlyNudge(context, kind, selectedHour, selectedMinute, true)
+        }, hour, minute, false).show()
     }
 
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -401,6 +421,12 @@ private fun LogbookApp(store: LocalStore) {
                                     LogbookScreen.Settings -> SettingsScreen(name = name,
                                         onName = { value -> name = value.take(40); prefs.edit().putString("name", name).apply() }, themeMode = themeMode,
                                         onThemeMode = { value -> themeMode = value; prefs.edit().putString("theme_mode", value).apply() },
+                                        morningEnabled = morningEnabled, eveningEnabled = eveningEnabled,
+                                        morningTime = String.format(Locale.getDefault(), "%02d:%02d", morningHour, morningMinute),
+                                        eveningTime = String.format(Locale.getDefault(), "%02d:%02d", eveningHour, eveningMinute),
+                                        onMorningEnabled = { value -> morningEnabled = value; prefs.edit().putBoolean("morning_enabled", value).apply(); scheduleFriendlyNudge(context, "morning", morningHour, morningMinute, value) },
+                                        onEveningEnabled = { value -> eveningEnabled = value; prefs.edit().putBoolean("evening_enabled", value).apply(); scheduleFriendlyNudge(context, "evening", eveningHour, eveningMinute, value) },
+                                        onMorningTime = { pickNudgeTime("morning") }, onEveningTime = { pickNudgeTime("evening") },
                                         onExport = { exportLauncher.launch("logbook_${SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())}.json") },
                                         onImport = { importLauncher.launch(arrayOf("application/json", "text/*")) }, onClear = { confirmClear = true }, onIntro = { screen = LogbookScreen.Intro })
                                     else -> Unit
@@ -427,25 +453,7 @@ private fun LogbookApp(store: LocalStore) {
         }
 
         selectedMemory?.let { memory ->
-            AlertDialog(
-                onDismissRequest = { selectedMemory = null },
-                title = { Text("A thought you kept", fontFamily = LogbookHand, fontSize = 27.sp) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(memory.text, style = MaterialTheme.typography.bodyLarge)
-                        Text(memory.tags.joinToString("  · ") { LogbookCategories[it] ?: it }, color = MaterialTheme.colorScheme.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-                        if (memory.attributes.isNotEmpty()) Text(memory.attributes.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                        Text(formatDate(memory.created), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                    }
-                },
-                confirmButton = {
-                    Row {
-                        TextButton(onClick = { selectedMemory = null; startCapture(memory) }) { Text("Edit") }
-                        TextButton(onClick = { selectedMemory = null }) { Text("Done") }
-                    }
-                },
-                dismissButton = { TextButton(onClick = { memoryToDelete = memory; selectedMemory = null }) { Text("Delete", color = MaterialTheme.colorScheme.error) } }
-            )
+            StickyNoteSheet(memory, onDismiss = { selectedMemory = null }, onEdit = { selectedMemory = null; startCapture(memory) }, onDelete = { memoryToDelete = memory; selectedMemory = null }, onDone = { selectedMemory = null })
         }
         memoryToDelete?.let { memory -> AlertDialog(
             onDismissRequest = { memoryToDelete = null }, title = { Text("Delete this thought?") },

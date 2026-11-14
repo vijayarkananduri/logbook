@@ -137,9 +137,9 @@ internal fun DewSurface(
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
-        modifier.shadow(if (MaterialTheme.colorScheme.background.luminance() < 0.5f) 5.dp else 8.dp, shape)
+        modifier.shadow(if (MaterialTheme.colorScheme.background.luminance() < 0.5f) 6.dp else 10.dp, shape)
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(tone.copy(alpha = 0.76f), tone.copy(alpha = 0.66f))))
+            .background(tone)
             .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), shape)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
     ) { content() }
@@ -148,13 +148,10 @@ internal fun DewSurface(
 @Composable
 internal fun BrandBar(onGuide: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 5.dp, bottom = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Image(painterResource(R.drawable.logbook_logo), "logbook logo", Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)))
-        Spacer(Modifier.width(9.dp))
-        Column(Modifier.weight(1f)) {
-            Text("logbook", style = MaterialTheme.typography.titleMedium.copy(fontFamily = LogbookBody, fontWeight = FontWeight.Bold, fontSize = 22.sp), color = MaterialTheme.colorScheme.onBackground)
-            Text("your private mind space", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        IconButton(onClick = onGuide, modifier = Modifier.size(48.dp).semantics { contentDescription = "Open private Guide" }) { Icon(Icons.Rounded.ChatBubbleOutline, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Image(painterResource(R.drawable.logbook_logo), "logbook logo", Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)))
+        Spacer(Modifier.width(8.dp))
+        Text("logbook", style = MaterialTheme.typography.titleMedium.copy(fontFamily = LogbookBody, fontWeight = FontWeight.Bold, fontSize = 19.sp), color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
+        Spacer(Modifier.size(12.dp))
     }
 }
 

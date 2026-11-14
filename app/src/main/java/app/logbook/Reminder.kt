@@ -13,54 +13,85 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.util.Calendar
+import kotlin.random.Random
+
+private const val CHANNEL_ID = "logbook_reminders"
+private const val ACTION_NUDGE = "app.logbook.FRIENDLY_NUDGE"
 
 fun scheduleReminder(context: Context, todo: Todo) {
     val due = todo.due ?: return
     if (todo.completed || due <= System.currentTimeMillis()) return
-    val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     val intent = Intent(context, ReminderReceiver::class.java).putExtra("text", todo.text).putExtra("id", todo.id)
-    val pending = PendingIntent.getBroadcast(
-        context, todo.id.hashCode(), intent,
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
+    val pending = PendingIntent.getBroadcast(context, todo.id.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     manager.cancel(pending)
     manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, pending)
 }
 
 fun cancelReminder(context: Context, id: String) {
     val intent = Intent(context, ReminderReceiver::class.java).putExtra("id", id)
-    val pending = PendingIntent.getBroadcast(
-        context, id.hashCode(), intent,
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
+    val pending = PendingIntent.getBroadcast(context, id.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(pending)
     pending.cancel()
 }
 
-fun cancelAllReminders(context: Context, todos: List<Todo>) {
-    todos.forEach { cancelReminder(context, it.id) }
+fun cancelAllReminders(context: Context, todos: List<Todo>) = todos.forEach { cancelReminder(context, it.id) }
+
+fun scheduleFriendlyNudge(context: Context, kind: String, hour: Int, minute: Int, enabled: Boolean) {
+    val id = "nudge_$kind"
+    val intent = Intent(context, ReminderReceiver::class.java).setAction(ACTION_NUDGE).putExtra("kind", kind).putExtra("id", id)
+    val pending = PendingIntent.getBroadcast(context, id.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    manager.cancel(pending)
+    if (!enabled) return
+    val next = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, hour.coerceIn(0, 23)); set(Calendar.MINUTE, minute.coerceIn(0, 59)); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
+    }
+    manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.timeInMillis, pending)
+}
+
+private fun ensureChannel(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "logbook reminders", NotificationManager.IMPORTANCE_DEFAULT)
+        )
+    }
+}
+
+private fun nudgeText(context: Context, kind: String): String {
+    val open = LocalStore(context.applicationContext).use { it.todos().count { todo -> !todo.completed } }
+    val prefs = context.getSharedPreferences("settings", 0)
+    val pool = if (kind == "morning") {
+        if (open > 0) listOf("Good morning. You have $open things in motion today.", "Morning. $open small things are waiting for you—take them one at a time.", "Good morning. Your day has $open things on the board and room to breathe.")
+        else listOf("Good morning. No weights to lift today—make it a good one.", "Good morning. Your list is clear, so take the day at your own pace.", "Morning. Nothing heavy on the board today—enjoy your day.")
+    } else {
+        listOf("Hey, how did your day treat you?", "The day is winding down. Anything you want to remember?", "You made it through today. Want to leave a thought here?", "Anything to carry forward from today?")
+    }
+    val key = "last_nudge_$kind"
+    var index = Random.nextInt(pool.size)
+    if (pool.size > 1 && index == prefs.getInt(key, -1)) index = (index + 1) % pool.size
+    prefs.edit().putInt(key, index).apply()
+    return pool[index]
 }
 
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
-                NotificationChannel("logbook_reminders", "logbook reminders", NotificationManager.IMPORTANCE_DEFAULT)
-            )
+        ensureChannel(context)
+        val isNudge = intent.action == ACTION_NUDGE
+        val id = intent.getStringExtra("id") ?: "logbook"
+        val text = if (isNudge) nudgeText(context, intent.getStringExtra("kind") ?: "morning") else intent.getStringExtra("text")?.take(140) ?: "A note to yourself is ready."
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(context, CHANNEL_ID) else Notification.Builder(context)
+        val notification = builder.setSmallIcon(R.drawable.ic_logbook).setContentTitle(if (isNudge) "logbook" else "A note to yourself").setContentText(text).setAutoCancel(true).build()
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(id.hashCode(), notification)
+        if (isNudge) {
+            val prefs = context.getSharedPreferences("settings", 0)
+            val kind = intent.getStringExtra("kind") ?: "morning"
+            val hour = prefs.getInt("${kind}_hour", if (kind == "morning") 8 else 20)
+            val minute = prefs.getInt("${kind}_minute", 0)
+            scheduleFriendlyNudge(context, kind, hour, minute, prefs.getBoolean("${kind}_enabled", true))
         }
-        val text = intent.getStringExtra("text")?.take(140) ?: "A note to yourself is ready."
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(context, "logbook_reminders")
-        } else {
-            Notification.Builder(context)
-        }
-        val notification = builder.setSmallIcon(R.drawable.ic_logbook)
-            .setContentTitle("A note to yourself")
-            .setContentText(text)
-            .setAutoCancel(true)
-            .build()
-        manager.notify(intent.getStringExtra("id")?.hashCode() ?: 0, notification)
     }
 }
 
@@ -71,12 +102,10 @@ class BootReceiver : BroadcastReceiver() {
             val store = LocalStore(context.applicationContext)
             try {
                 store.todos().filter { !it.completed }.forEach { scheduleReminder(context, it) }
-            } catch (_: Exception) {
-                // A boot-time reminder recovery must never prevent the device from finishing boot.
-            } finally {
-                store.close()
-                pendingResult.finish()
-            }
+                val prefs = context.getSharedPreferences("settings", 0)
+                scheduleFriendlyNudge(context, "morning", prefs.getInt("morning_hour", 8), prefs.getInt("morning_minute", 0), prefs.getBoolean("morning_enabled", true))
+                scheduleFriendlyNudge(context, "evening", prefs.getInt("evening_hour", 20), prefs.getInt("evening_minute", 0), prefs.getBoolean("evening_enabled", true))
+            } catch (_: Exception) { } finally { store.close(); pendingResult.finish() }
         }
     }
 }

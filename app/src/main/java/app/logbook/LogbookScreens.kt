@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.painterResource
@@ -37,6 +38,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -161,7 +164,7 @@ internal fun HomeScreen(name: String, memories: List<Memory>, todos: List<Todo>,
         if (memories.isEmpty()) {
             DewSurface(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(19.dp)) {
-                    Text("Nothing here yet.", fontFamily = LogbookHand, fontSize = 27.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text("A fresh page.", fontFamily = LogbookHand, fontSize = 27.sp, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(Modifier.height(3.dp))
                     Text("Use the + button whenever you want to save a thought.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -302,7 +305,7 @@ internal fun TasksScreen(todos: List<Todo>, draft: String, onDraft: (String) -> 
         }
         Spacer(Modifier.height(13.dp))
         if (ordered.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            EmptyPanel("Nothing is asking for you yet.", "Add a task here, or say ‘Remind me to…’ in the local guide.")
+            EmptyPanel("No weights to lift today.", "Add a next step whenever one naturally comes to mind.")
         } else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
             items(ordered, key = { it.id }) { task -> TodoCard(task, { onToggle(task) }, { onDelete(task) }) }
         }
@@ -337,6 +340,8 @@ internal fun GuideScreen(chat: List<ChatLine>, draft: String, onDraft: (String) 
 @Composable
 internal fun SettingsScreen(
     name: String, onName: (String) -> Unit, themeMode: String, onThemeMode: (String) -> Unit,
+    morningEnabled: Boolean, eveningEnabled: Boolean, morningTime: String, eveningTime: String,
+    onMorningEnabled: (Boolean) -> Unit, onEveningEnabled: (Boolean) -> Unit, onMorningTime: () -> Unit, onEveningTime: () -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onClear: () -> Unit, onIntro: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, vertical = 7.dp)) {
@@ -354,6 +359,14 @@ internal fun SettingsScreen(
         Spacer(Modifier.height(4.dp))
         SettingsGroup("Your profile") {
             EntryField(name, onName, "A name for the greeting", false, 38.dp)
+        }
+        Spacer(Modifier.height(4.dp))
+        SettingsGroup("Friendly nudges") {
+            Text("A gentle hello in the morning and a small check-in at night. These are not task reminders.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            SettingToggle(Icons.Rounded.WbSunny, "Morning nudge", "A warm start with your real open-task count.", morningEnabled, onMorningEnabled)
+            TextButton(onClick = onMorningTime, modifier = Modifier.fillMaxWidth(), enabled = morningEnabled) { Text("Morning time · $morningTime") }
+            SettingToggle(Icons.Rounded.Nightlight, "Evening nudge", "A friendly end-of-day check-in.", eveningEnabled, onEveningEnabled)
+            TextButton(onClick = onEveningTime, modifier = Modifier.fillMaxWidth(), enabled = eveningEnabled) { Text("Evening time · $eveningTime") }
         }
         Spacer(Modifier.height(4.dp))
         SettingsGroup("Your writing stays yours") {
@@ -523,6 +536,41 @@ internal fun PreviewScreen(
 }
 
 @Composable
+internal fun StickyNoteSheet(memory: Memory, onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, onDone: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.34f)).clickable { onDismiss() }, contentAlignment = Alignment.BottomCenter) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
+                .clip(RoundedCornerShape(26.dp)).background(if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color(0xFF3A2F27) else Color(0xFFFFF1B8))
+                .clickable { }.padding(horizontal = 22.dp, vertical = 20.dp)) {
+                Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)))
+                Spacer(Modifier.height(16.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    memory.tags.take(3).forEach { tag ->
+                        Text(LogbookCategories[tag] ?: tag, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)).padding(horizontal = 8.dp, vertical = 4.dp))
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(memory.text, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp, lineHeight = 27.sp), color = MaterialTheme.colorScheme.onSurface)
+                if (memory.attributes.isNotEmpty()) {
+                    Spacer(Modifier.height(13.dp))
+                    Text(memory.attributes.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(formatDate(memory.created), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(18.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onEdit) { Text("Edit") }
+                    Button(onClick = onDone, shape = RoundedCornerShape(14.dp)) { Text("Done") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 internal fun BootSplash(onDismiss: () -> Unit) {
     var phase by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
@@ -535,10 +583,9 @@ internal fun BootSplash(onDismiss: () -> Unit) {
     }
     val wordAlpha by animateFloatAsState(if (phase >= 2) 1f else 0f, tween(420), label = "splash-word-alpha")
     val wordScale by animateFloatAsState(if (phase >= 2) 1f else 0.86f, tween(500), label = "splash-word-scale")
-    val notes = listOf("an idea", "a person", "a link", "a next step", "a feeling", "a place")
-    val starts = listOf((-112).dp to (-54).dp, (-38).dp to (-64).dp, 58.dp to (-58).dp, 112.dp to (-22).dp, (-62).dp to 54.dp, 60.dp to 52.dp)
-    val stacks = listOf((-82).dp to (-29).dp, (-30).dp to (-39).dp, 28.dp to (-39).dp, 82.dp to (-29).dp, (-28).dp to 35.dp, 30.dp to 35.dp)
-    val logoScale by animateFloatAsState(if (phase >= 1) 1f else 0.65f, tween(520), label = "splash-logo-scale")
+    val notes = listOf("https://github.com", "buy coffee", "an idea", "meeting Sarah", "a next step", "a feeling", "some code")
+    val starts = listOf((-112).dp to (-54).dp, (-38).dp to (-64).dp, 58.dp to (-58).dp, 112.dp to (-22).dp, (-62).dp to 54.dp, 60.dp to 52.dp, 0.dp to 92.dp)
+    val stacks = listOf((-92).dp to (-30).dp, (-46).dp to (-42).dp, 0.dp to (-48).dp, 46.dp to (-42).dp, 86.dp to (-25).dp, (-28).dp to 32.dp, 32.dp to 32.dp)
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.fillMaxWidth().height(142.dp), contentAlignment = Alignment.Center) {
@@ -546,13 +593,12 @@ internal fun BootSplash(onDismiss: () -> Unit) {
                     val x by animateDpAsState(if (phase == 0) starts[index].first else stacks[index].first, tween(680, delayMillis = index * 55), label = "splash-note-x-$index")
                     val y by animateDpAsState(if (phase == 0) starts[index].second else stacks[index].second, tween(680, delayMillis = index * 55), label = "splash-note-y-$index")
                     val noteAlpha by animateFloatAsState(if (phase >= 2) 0f else 1f, tween(300), label = "splash-note-alpha-$index")
-                    Text(note, Modifier.offset(x, y).alpha(noteAlpha).clip(RoundedCornerShape(12.dp))
+                    Text(note, Modifier.offset(x, y).alpha(noteAlpha).clip(RoundedCornerShape(12.dp)).shadow(8.dp, RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
                         .padding(horizontal = 10.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
                 }
-                Image(painterResource(R.drawable.logbook_logo), "logbook logo", Modifier.size(76.dp).scale(logoScale))
             }
-            Text("logbook", Modifier.alpha(wordAlpha).scale(wordScale), style = MaterialTheme.typography.headlineMedium.copy(fontFamily = LogbookBody, fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
+            Text("logbook.", Modifier.alpha(wordAlpha).scale(wordScale), style = MaterialTheme.typography.headlineMedium.copy(fontFamily = LogbookHand, fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.primary)
             Text("your private mind space", Modifier.alpha(wordAlpha), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp)) { Text("Skip") }
