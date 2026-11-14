@@ -1,6 +1,6 @@
 # Logbook
 
-<p align="center"><img src="docs/logo.svg" width="96" alt="Logbook mark"></p>
+<p align="center"><img src="docs/logo.png" width="96" alt="Logbook mark"></p>
 
 <p align="center"><strong>A little room for your thoughts.</strong><br>Private, local-first capture for Android.</p>
 
