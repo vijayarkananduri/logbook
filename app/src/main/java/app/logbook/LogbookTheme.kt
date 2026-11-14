@@ -50,21 +50,14 @@ internal val LogbookBody = FontFamily(
     Font(R.font.urbanist, FontWeight.Normal), Font(R.font.urbanist, FontWeight.Medium),
     Font(R.font.urbanist, FontWeight.SemiBold), Font(R.font.urbanist, FontWeight.Bold)
 )
-internal val LogbookHand = FontFamily(Font(R.font.caveat))
+internal val LogbookHand = FontFamily(Font(R.font.bebas_neue, FontWeight.Normal))
 internal val LogbookCategories = linkedMapOf(
     "ideas" to "Ideas", "projects" to "Projects", "emotions" to "Feelings",
     "links" to "Links", "code" to "Code", "life" to "Life",
     "persons" to "People", "refs" to "References"
 )
-internal val AccentNames = listOf("Pumpkin", "Amber", "Husky grey", "Rust", "Mango", "Lime")
-private val LightAccents = listOf(
-    Color(0xFFE8752A), Color(0xFFC8943A), Color(0xFF7D8587),
-    Color(0xFF9F4030), Color(0xFFD98478), Color(0xFFA5B45E)
-)
-private val DarkAccents = listOf(
-    Color(0xFFF39159), Color(0xFFE9C476), Color(0xFFADB8BB),
-    Color(0xFFF08B6F), Color(0xFFEAA99A), Color(0xFFDCEB82)
-)
+
+
 private val Paper = Color(0xFFF5F0E8)
 private val Ink = Color(0xFF2C241D)
 private val Night = Color(0xFF1C1916)
@@ -86,92 +79,64 @@ private val LogbookTypography = BaseTypography.copy(
     labelLarge = BaseTypography.labelLarge.copy(fontFamily = LogbookBody, fontWeight = FontWeight.SemiBold),
     labelMedium = BaseTypography.labelMedium.copy(fontFamily = LogbookBody)
 )
-private val LocalReducedEffects = compositionLocalOf { false }
+private val LocalReducedEffects = compositionLocalOf { true }
 
 @Composable
-internal fun LogbookTheme(dark: Boolean, accentIndex: Int, reducedEffects: Boolean, content: @Composable () -> Unit) {
-    val accent = (if (dark) DarkAccents else LightAccents)[accentIndex.coerceIn(0, 5)]
-    val onAccent = if (accent.luminance() > 0.34f) Ink else Color.White
+internal fun LogbookTheme(dark: Boolean, content: @Composable () -> Unit) {
+    val accent = if (dark) Color(0xFFEF9A70) else Color(0xFFB6532D)
+    val onAccent = if (dark) Color(0xFF2D1E17) else Color.White
     val scheme = if (dark) darkColorScheme(
         primary = accent, onPrimary = onAccent,
-        primaryContainer = accent.copy(alpha = 0.22f), onPrimaryContainer = NightInk,
-        secondary = Color(0xFFB3C48B), onSecondary = Color(0xFF202515),
-        tertiary = Color(0xFFEAA99A), onTertiary = Ink,
+        primaryContainer = Color(0xFF493126), onPrimaryContainer = NightInk,
+        secondary = Color(0xFF9BA67E), onSecondary = Color(0xFF25291E),
+        tertiary = Color(0xFFD88970), onTertiary = Night,
         background = Night, onBackground = NightInk,
-        surface = Color(0xFF28231F), onSurface = NightInk,
-        surfaceVariant = Color(0xFF342D27), onSurfaceVariant = Color(0xFFC2B6A8),
-        outline = Color(0xFF51463D), outlineVariant = Color(0xFF403830)
+        surface = Color(0xFF26221F), onSurface = NightInk,
+        surfaceVariant = Color(0xFF332D28), onSurfaceVariant = Color(0xFFC5B9AC),
+        outline = Color(0xFF5A4D43), outlineVariant = Color(0xFF453B33)
     ) else lightColorScheme(
         primary = accent, onPrimary = onAccent,
-        primaryContainer = accent.copy(alpha = 0.16f), onPrimaryContainer = Ink,
-        secondary = Color(0xFF536B53), onSecondary = Color.White,
-        tertiary = Color(0xFF9F4030), onTertiary = Color.White,
+        primaryContainer = Color(0xFFF3DED3), onPrimaryContainer = Ink,
+        secondary = Color(0xFF667454), onSecondary = Color.White,
+        tertiary = Color(0xFF9F4937), onTertiary = Color.White,
         background = Paper, onBackground = Ink,
-        surface = Color(0xFFFFFCF7), onSurface = Ink,
-        surfaceVariant = Color(0xFFECE5DA), onSurfaceVariant = Color(0xFF72675C),
-        outline = Color(0xFFDCD1C3), outlineVariant = Color(0xFFE8DFD4)
+        surface = Color(0xFFFFFCF8), onSurface = Ink,
+        surfaceVariant = Color(0xFFECE5DC), onSurfaceVariant = Color(0xFF70665D),
+        outline = Color(0xFFD8CEC2), outlineVariant = Color(0xFFE4DCD2)
     )
-    CompositionLocalProvider(LocalReducedEffects provides reducedEffects) {
+    CompositionLocalProvider(LocalReducedEffects provides true) {
         MaterialTheme(colorScheme = scheme, typography = LogbookTypography, shapes = Shapes(
-            small = RoundedCornerShape(14.dp), medium = RoundedCornerShape(22.dp), large = RoundedCornerShape(30.dp)
+            small = RoundedCornerShape(12.dp), medium = RoundedCornerShape(18.dp), large = RoundedCornerShape(24.dp)
         ), content = content)
     }
 }
 
 @Composable
 internal fun LogbookBackdrop(content: @Composable BoxScope.() -> Unit) {
-    val bg = MaterialTheme.colorScheme.background
-    val accent = MaterialTheme.colorScheme.primary
-    Box(Modifier.fillMaxSize().background(bg)) {
-        if (!LocalReducedEffects.current) {
-            Box(Modifier.align(Alignment.TopEnd).size(300.dp).background(
-                Brush.radialGradient(listOf(accent.copy(alpha = 0.075f), accent.copy(alpha = 0.025f), Color.Transparent)), CircleShape
-            ))
-            Box(Modifier.align(Alignment.BottomStart).size(250.dp).background(
-                Brush.radialGradient(listOf(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.045f), Color.Transparent)), CircleShape
-            ))
-        }
-        content()
-    }
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
 }
 
 @Composable
 internal fun DewSurface(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(24.dp),
+    shape: Shape = RoundedCornerShape(18.dp),
     tone: Color = MaterialTheme.colorScheme.surface,
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
-    val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val reduced = LocalReducedEffects.current
-    val scale by animateFloatAsState(if (pressed && onClick != null) 0.985f else 1f, spring(dampingRatio = 0.72f, stiffness = 420f), label = "dew-press")
-    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val base = tone.compositeOver(MaterialTheme.colorScheme.surface).copy(alpha = if (reduced) 0.97f else 0.92f)
-    val sheen = if (dark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.84f)
-    val depth = if (dark) Color.Black.copy(alpha = 0.20f) else Color(0xFFE6DCCE).copy(alpha = 0.50f)
-    val rim = if (dark) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.95f)
     Box(
-        modifier.graphicsLayer { scaleX = scale; scaleY = scale }
-            .shadow(if (reduced) 0.dp else 9.dp, shape, clip = false)
-            .clip(shape)
-            .then(if (onClick != null) Modifier.clickable(source, indication = null, role = Role.Button, onClick = onClick) else Modifier)
-            .then(if (reduced) Modifier.background(base, shape) else Modifier.background(Brush.verticalGradient(listOf(sheen, base, depth)), shape))
-            .border(BorderStroke(1.dp, rim), shape)
-    ) {
-        if (!reduced) Box(Modifier.align(Alignment.TopCenter).fillMaxWidth(0.72f).height(2.dp).padding(horizontal = 24.dp).clip(CircleShape).background(Brush.horizontalGradient(listOf(Color.Transparent, sheen, Color.Transparent))))
-        content()
-    }
+        modifier.clip(shape)
+            .background(tone)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+    ) { content() }
 }
 
 @Composable
 internal fun BrandBar(name: String, onSettings: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.ic_logbook), "Logbook", Modifier.size(42.dp))
-        Spacer(Modifier.width(10.dp))
+    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 5.dp, bottom = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("LOGBOOK", style = MaterialTheme.typography.labelLarge, letterSpacing = 1.5.sp, color = MaterialTheme.colorScheme.primary)
+            Text("logbook", style = MaterialTheme.typography.titleMedium, fontFamily = LogbookBody, letterSpacing = 0.4.sp, color = MaterialTheme.colorScheme.onSurface)
             Text("your private mind space", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         IconButton(onClick = onSettings, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.Settings, "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -201,7 +166,7 @@ internal fun EntryField(value: String, onValue: (String) -> Unit, hint: String, 
 internal fun PrimaryAction(label: String, accent: Color, onClick: () -> Unit, enabled: Boolean = true) {
     Button(onClick, Modifier.fillMaxWidth().defaultMinSize(minHeight = 52.dp), enabled = enabled, shape = RoundedCornerShape(17.dp),
         colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = if (accent.luminance() > 0.34f) Ink else Color.White),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = if (LocalReducedEffects.current) 0.dp else 3.dp)) {
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp, focusedElevation = 0.dp, hoveredElevation = 0.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }
@@ -282,25 +247,28 @@ internal fun SettingToggle(icon: ImageVector, title: String, description: String
 }
 
 @Composable
-internal fun BottomNavigation(screen: LogbookScreen, accent: Color, onSelect: (LogbookScreen) -> Unit) {
+internal fun BottomNavigation(screen: LogbookScreen, onSelect: (LogbookScreen) -> Unit) {
     val destinations = listOf(
         Triple(LogbookScreen.Home, "Home", Icons.Rounded.Home),
-        Triple(LogbookScreen.Search, "Search", Icons.Rounded.Search),
         Triple(LogbookScreen.Tasks, "Tasks", Icons.Rounded.CheckCircle),
-        Triple(LogbookScreen.Guide, "Guide", Icons.Rounded.Chat),
-        Triple(LogbookScreen.Settings, "Settings", Icons.Rounded.Settings)
+        Triple(LogbookScreen.Guide, "Guide", Icons.Rounded.Chat)
     )
-    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 5.dp).clip(RoundedCornerShape(24.dp))
-        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.93f))
-        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.75f), RoundedCornerShape(24.dp)).padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+    val selectedScreen = when (screen) {
+        LogbookScreen.Search, LogbookScreen.Settings -> LogbookScreen.Home
+        else -> screen
+    }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 5.dp).clip(RoundedCornerShape(18.dp))
+        .background(MaterialTheme.colorScheme.surface)
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(18.dp)).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         destinations.forEach { (destination, label, icon) ->
-            val selected = screen == destination
-            Column(Modifier.weight(1f).heightIn(min = 50.dp).clip(RoundedCornerShape(19.dp))
-                .background(if (selected) accent else Color.Transparent).clickable(role = Role.Tab) { onSelect(destination) }
+            val selected = selectedScreen == destination
+            Column(Modifier.weight(1f).heightIn(min = 50.dp).clip(RoundedCornerShape(14.dp))
+                .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                .clickable(role = Role.Tab) { onSelect(destination) }
                 .padding(vertical = 5.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(icon, null, tint = if (selected) (if (accent.luminance() > 0.34f) Ink else Color.White) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                Text(label, color = if (selected) (if (accent.luminance() > 0.34f) Ink else Color.White) else MaterialTheme.colorScheme.onSurfaceVariant,
+                Icon(icon, null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                Text(label, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelMedium, maxLines = 1)
             }
         }
