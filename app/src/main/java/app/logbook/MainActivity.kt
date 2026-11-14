@@ -146,8 +146,8 @@ private fun LogbookApp(store: LocalStore) {
         ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
-    fun saveTask(text: String, memoryId: String? = null, dueOverride: Long? = null) {
-        val task = Todo(SmartNlp.id("td"), text.trim(), dueOverride ?: SmartNlp.due(text), memoryId = memoryId)
+    fun saveTask(text: String, memoryId: String? = null, dueOverride: Long? = SmartNlp.due(text)) {
+        val task = Todo(SmartNlp.id("td"), text.trim(), dueOverride, memoryId = memoryId)
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -269,7 +269,7 @@ private fun LogbookApp(store: LocalStore) {
         screen = LogbookScreen.Compose
     }
 
-    fun saveThought(asTask: Boolean) {
+    fun saveThought(asTask: Boolean, taskDue: Long? = null) {
         val body = composerText.trim()
         if (body.isBlank()) return
         val analysis = SmartNlp.analyze(body)
@@ -279,7 +279,7 @@ private fun LogbookApp(store: LocalStore) {
             tags = previewTags.ifEmpty { analysis.first }, attributes = analysis.second,
             created = existing?.created ?: System.currentTimeMillis()
         )
-        val task = if (asTask) Todo(SmartNlp.id("td"), SmartNlp.taskText(body), SmartNlp.due(body), memoryId = memory.id) else null
+        val task = if (asTask) Todo(SmartNlp.id("td"), SmartNlp.taskText(body), taskDue, memoryId = memory.id) else null
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
@@ -420,7 +420,7 @@ private fun LogbookApp(store: LocalStore) {
                         addTask = addTaskWithMemory,
                         onAddTask = { addTaskWithMemory = it },
                         onBack = { screen = LogbookScreen.Compose },
-                        onSave = { saveThought(addTaskWithMemory) },
+                        onSave = { taskDue -> saveThought(addTaskWithMemory, taskDue) },
                         similar = SmartNlp.similarMemories(composerText, memories, editingMemory?.id, 2),
                         onRelated = { tag -> query = ""; category = tag; screen = LogbookScreen.Search }
                     )
@@ -437,7 +437,7 @@ private fun LogbookApp(store: LocalStore) {
                                     LogbookScreen.Search -> SearchScreen(memories, query, { query = it }, category, { category = it }, { selectedMemory = it }, { memoryToDelete = it })
                                     LogbookScreen.Hubs -> HubsScreen(memories, selectedHub, { selectedHub = it }, { selectedMemory = it })
                                     LogbookScreen.Tasks -> TasksScreen(todos, taskDraft, taskDraftDue, { taskDraft = it }, { taskDraftDue = it },
-                                        { if (taskDraft.isNotBlank()) { saveTask(taskDraft, dueOverride = taskDraftDue); taskDraft = ""; taskDraftDue = null } },
+                                        { due -> if (taskDraft.isNotBlank()) { saveTask(taskDraft, dueOverride = due); taskDraft = ""; taskDraftDue = null } },
                                         { task -> val updated = task.copy(completed = !task.completed); scope.launch {
                                             withContext(Dispatchers.IO) { store.saveTodo(updated); if (updated.completed) cancelReminder(context, updated.id) else scheduleReminder(context, updated) }; refresh()
                                         } }, { task -> taskToDelete = task })
@@ -456,7 +456,7 @@ private fun LogbookApp(store: LocalStore) {
                                         onMorningTime = { pickNudgeTime("morning") }, onEveningTime = { pickNudgeTime("evening") },
                                         showRecentNotes = showRecentNotes,
                                         onShowRecentNotes = { value -> showRecentNotes = value; prefs.edit().putBoolean("show_recent_notes", value).apply() },
-                                        onHelp = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://thelogbook.netlify.app/guide.html"))) } },
+                                        onHelp = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://vijayarkananduri.github.io/logbook/guide.html"))) } },
                                         onExport = { exportLauncher.launch("logbook_${SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())}.json") },
                                         onImport = { importLauncher.launch(arrayOf("application/json", "text/*")) }, onClear = { confirmClear = true }, onIntro = { screen = LogbookScreen.Intro })
                                     else -> Unit

@@ -296,10 +296,11 @@ private fun HubCard(hub: EntityHub, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun TasksScreen(todos: List<Todo>, draft: String, draftDue: Long?, onDraft: (String) -> Unit, onDraftDue: (Long?) -> Unit, onAdd: () -> Unit, onToggle: (Todo) -> Unit, onDelete: (Todo) -> Unit) {
+internal fun TasksScreen(todos: List<Todo>, draft: String, draftDue: Long?, onDraft: (String) -> Unit, onDraftDue: (Long?) -> Unit, onAdd: (Long?) -> Unit, onToggle: (Todo) -> Unit, onDelete: (Todo) -> Unit) {
     val ordered = todos.sortedWith(compareBy<Todo> { it.completed }.thenBy { it.due ?: Long.MAX_VALUE }.thenByDescending { it.created })
     var showCalendar by remember { mutableStateOf(false) }
-    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = draftDue ?: System.currentTimeMillis())
+    var saveAfterDateChoice by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = draftDue ?: SmartNlp.due(draft) ?: System.currentTimeMillis())
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp)) {
         Text("Things in motion", fontFamily = LogbookHand, fontSize = 32.sp, color = MaterialTheme.colorScheme.onBackground)
         Text("A gentle place for what comes next.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -309,7 +310,7 @@ internal fun TasksScreen(todos: List<Todo>, draft: String, draftDue: Long?, onDr
             IconButton(onClick = { showCalendar = true }, modifier = Modifier.size(50.dp)) {
                 Icon(Icons.Rounded.CalendarMonth, "Choose task date", tint = MaterialTheme.colorScheme.primary)
             }
-            IconButton(onClick = onAdd, modifier = Modifier.size(50.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)) {
+            IconButton(onClick = { if (draft.isNotBlank()) { saveAfterDateChoice = true; showCalendar = true } }, modifier = Modifier.size(50.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)) {
                 Icon(Icons.Rounded.Add, "Add task", tint = MaterialTheme.colorScheme.onPrimary)
             }
         }
@@ -332,10 +333,14 @@ internal fun TasksScreen(todos: List<Todo>, draft: String, draftDue: Long?, onDr
             datePickerState.selectedDateMillis?.let { millis ->
                 val picked = Calendar.getInstance().apply { timeInMillis = millis; set(Calendar.HOUR_OF_DAY, 9); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
                 onDraftDue(picked)
+                if (saveAfterDateChoice) onAdd(picked)
+            } else {
+                if (saveAfterDateChoice) onAdd(null)
             }
+            saveAfterDateChoice = false
             showCalendar = false
-        }) { Text("Choose") } },
-        dismissButton = { TextButton(onClick = { showCalendar = false }) { Text("Cancel") } }
+        }) { Text("Save task") } },
+        dismissButton = { TextButton(onClick = { if (saveAfterDateChoice) onAdd(null); saveAfterDateChoice = false; showCalendar = false }) { Text(if (saveAfterDateChoice) "Save without date" else "Cancel") } }
     ) { DatePicker(state = datePickerState) }
 }
 
@@ -469,12 +474,15 @@ internal fun ComposerScreen(text: String, onText: (String) -> Unit, onBack: () -
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun PreviewScreen(
     text: String, onText: (String) -> Unit, tags: List<String>, onToggleTag: (String) -> Unit,
     customTagDraft: String, onCustomTagDraft: (String) -> Unit, onAddCustomTag: () -> Unit,
     taskSuggested: Boolean, addTask: Boolean, onAddTask: (Boolean) -> Unit,
-    onBack: () -> Unit, onSave: () -> Unit, similar: List<SimilarMemory>, onRelated: (String) -> Unit
+    onBack: () -> Unit, onSave: (Long?) -> Unit, similar: List<SimilarMemory>, onRelated: (String) -> Unit
 ) {
+    var showTaskDatePicker by remember { mutableStateOf(false) }
+    val taskDatePickerState = rememberDatePickerState(initialSelectedDateMillis = SmartNlp.due(text) ?: System.currentTimeMillis())
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.ArrowBack, "Back to editing") }
@@ -563,10 +571,22 @@ internal fun PreviewScreen(
             }
         }
         Spacer(Modifier.height(15.dp))
-        PrimaryAction(if (addTask) "Save thought + task" else "Save to logbook", MaterialTheme.colorScheme.primary, onSave, text.isNotBlank())
+        PrimaryAction(if (addTask) "Choose task date and save" else "Save to logbook", MaterialTheme.colorScheme.primary,
+            { if (addTask) showTaskDatePicker = true else onSave(null) }, text.isNotBlank())
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)) { Text("Back to editing") }
     }
+    if (showTaskDatePicker) DatePickerDialog(
+        onDismissRequest = { showTaskDatePicker = false },
+        confirmButton = { TextButton(onClick = {
+            val picked = taskDatePickerState.selectedDateMillis?.let { millis ->
+                Calendar.getInstance().apply { timeInMillis = millis; set(Calendar.HOUR_OF_DAY, 9); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
+            }
+            onSave(picked)
+            showTaskDatePicker = false
+        }) { Text("Save task") } },
+        dismissButton = { TextButton(onClick = { onSave(null); showTaskDatePicker = false }) { Text("Save without date") } }
+    ) { DatePicker(state = taskDatePickerState) }
 }
 
 @Composable
