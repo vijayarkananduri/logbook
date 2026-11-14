@@ -43,7 +43,8 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-internal enum class LogbookScreen { Welcome, Intro, Home, Search, Tasks, Settings, Compose, Preview }
+internal enum class LogbookScreen { Welcome, Intro, Home, Search, Tasks, Guide, Settings, Compose, Preview }
+internal data class ChatLine(val fromUser: Boolean, val text: String)
 
 internal val LogbookBody = FontFamily(
     Font(R.font.urbanist, FontWeight.Normal), Font(R.font.urbanist, FontWeight.Medium),
@@ -171,6 +172,7 @@ internal fun BrandBar(name: String, onSettings: () -> Unit) {
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text("LOGBOOK", style = MaterialTheme.typography.labelLarge, letterSpacing = 1.5.sp, color = MaterialTheme.colorScheme.primary)
+            Text("your private mind space", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         IconButton(onClick = onSettings, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.Settings, "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
@@ -223,8 +225,8 @@ internal fun CategoryChip(label: String, selected: Boolean, accent: Color, modif
 }
 
 @Composable
-internal fun MemoryCard(memory: Memory, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    DewSurface(modifier.fillMaxWidth(), onClick = onClick, shape = RoundedCornerShape(22.dp)) {
+internal fun MemoryCard(memory: Memory, onClick: () -> Unit) {
+    DewSurface(Modifier.fillMaxWidth(), onClick = onClick, shape = RoundedCornerShape(22.dp)) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Text(memory.text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 4, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(9.dp))
@@ -285,6 +287,7 @@ internal fun BottomNavigation(screen: LogbookScreen, accent: Color, onSelect: (L
         Triple(LogbookScreen.Home, "Home", Icons.Rounded.Home),
         Triple(LogbookScreen.Search, "Search", Icons.Rounded.Search),
         Triple(LogbookScreen.Tasks, "Tasks", Icons.Rounded.CheckCircle),
+        Triple(LogbookScreen.Guide, "Guide", Icons.Rounded.Chat),
         Triple(LogbookScreen.Settings, "Settings", Icons.Rounded.Settings)
     )
     Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 5.dp).clip(RoundedCornerShape(24.dp))

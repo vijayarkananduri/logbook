@@ -2,7 +2,6 @@ package app.logbook
 
 import android.Manifest
 import android.content.Intent
-import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -60,10 +59,6 @@ private fun LogbookApp(store: LocalStore) {
     var dark by remember { mutableStateOf(prefs.getBoolean("dark", false)) }
     var reducedEffects by remember { mutableStateOf(prefs.getBoolean("low", false)) }
     var accentIndex by remember { mutableIntStateOf(prefs.getInt("accent", 0).coerceIn(0, 5)) }
-    var startReminder by remember { mutableStateOf(prefs.getString("reminder_start", "09:00").orEmpty()) }
-    var endReminder by remember { mutableStateOf(prefs.getString("reminder_end", "18:00").orEmpty()) }
-    var taskPrompt by remember { mutableStateOf<String?>(null) }
-    var archivedIds by remember { mutableStateOf(prefs.getStringSet("archived", emptySet()).orEmpty()) }
     var screen by remember { mutableStateOf(if (prefs.getBoolean("onboarded", name.isNotBlank())) LogbookScreen.Home else LogbookScreen.Welcome) }
     var memories by remember { mutableStateOf(emptyList<Memory>()) }
     var todos by remember { mutableStateOf(emptyList<Todo>()) }
@@ -77,6 +72,8 @@ private fun LogbookApp(store: LocalStore) {
     var confirmMemoryDelete by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     var taskDraft by remember { mutableStateOf("") }
+    var assistantDraft by remember { mutableStateOf("") }
+    val chat = remember { mutableStateListOf(ChatLine(false, "I work right here on your device. I can find a thought, show your tasks, or add a reminder when you ask.")) }
     var banner by remember { mutableStateOf("") }
     var micStatus by remember { mutableStateOf("Voice is optional; typing always works.") }
     var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
@@ -116,24 +113,19 @@ private fun LogbookApp(store: LocalStore) {
         ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
-    fun saveTask(text: String, memoryId: String? = null, requestedDue: Long? = null, promptIfMissing: Boolean = true) {
-        val task = Todo(SmartNlp.id("td"), text.trim(), requestedDue ?: SmartNlp.due(text), memoryId = memoryId)
-        if (task.due == null && requestedDue == null && promptIfMissing) { taskPrompt = text.trim(); return }
+    fun saveTask(text: String, memoryId: String? = null) {
+        val task = Todo(SmartNlp.id("td"), text.trim(), SmartNlp.due(text), memoryId = memoryId)
         scope.launch {
             runCatching {
-                withContext(Dispatchers.IO) { store.saveTodo(task); scheduleReminder(context, task) }
-                refresh(); askForNotificationsIfNeeded(task.due != null)
+                withContext(Dispatchers.IO) {
+                    store.saveTodo(task)
+                    scheduleReminder(context, task)
+                }
+                refresh()
+                askForNotificationsIfNeeded(task.due != null)
                 toast(if (task.due != null) "Task saved with a local reminder" else "Task saved")
             }.onFailure { toast("Could not save that task") }
         }
-    }
-
-    fun finishPrompt(option: Int) {
-        val text = taskPrompt ?: return
-        taskPrompt = null
-        val now = System.currentTimeMillis()
-        val due = when (option) { 1 -> now + 30 * 60 * 1000L; 2 -> now + 4 * 60 * 60 * 1000L; 3 -> now + 24 * 60 * 60 * 1000L; else -> null }
-        saveTask(text, requestedDue = due, promptIfMissing = false)
     }
 
     fun beginVoiceCapture() {
@@ -353,16 +345,7 @@ private fun LogbookApp(store: LocalStore) {
                         ) { route ->
                             when (route) {
                                 LogbookScreen.Home -> HomeScreen(name, memories, todos, { startCapture() }, { selectedMemory = it }, { screen = LogbookScreen.Search })
-                                LogbookScreen.Search -> SearchScreen(
-                                    memories = memories,
-                                    todos = todos, query = query, onQuery = { query = it }, category = category, onCategory = { category = it },
-                                    onMemory = { selectedMemory = it },
-                                    onDelete = { memory -> scope.launch { withContext(Dispatchers.IO) { store.deleteMemory(memory.id) }; refresh(); toast("Thought deleted") } },
-                                    onArchive = { memory -> archivedIds = archivedIds + memory.id; prefs.edit().putStringSet("archived", archivedIds).apply(); toast("Thought archived") },
-                                    onDeleteTask = { task -> scope.launch { withContext(Dispatchers.IO) { cancelReminder(context, task.id); store.deleteTodo(task.id) }; refresh(); toast("Task removed") } },
-                                    onArchiveOlder = { val cutoff = System.currentTimeMillis() - 30L * 24L * 60L * 60L * 1000L; archivedIds = archivedIds + memories.filter { it.created < cutoff }.map { it.id }; prefs.edit().putStringSet("archived", archivedIds).apply(); toast("Thoughts older than 30 days archived") },
-                                    archivedIds = archivedIds
-                                )
+                                LogbookScreen.Search -> SearchScreen(memories, query, { query = it }, category, { category = it }, { selectedMemory = it })
                                 LogbookScreen.Tasks -> TasksScreen(
                                     todos, taskDraft, { taskDraft = it },
                                     { if (taskDraft.isNotBlank()) { saveTask(taskDraft); taskDraft = "" } },
@@ -378,6 +361,14 @@ private fun LogbookApp(store: LocalStore) {
                                     },
                                     { task -> scope.launch { withContext(Dispatchers.IO) { cancelReminder(context, task.id); store.deleteTodo(task.id) }; refresh(); toast("Task removed") } }
                                 )
+                                LogbookScreen.Guide -> GuideScreen(chat, assistantDraft, { assistantDraft = it }) {
+                                    val question = assistantDraft.trim()
+                                    if (question.isNotBlank()) {
+                                        chat.add(ChatLine(true, question))
+                                        chat.add(ChatLine(false, localAnswer(question)))
+                                        assistantDraft = ""
+                                    }
+                                }
                                 LogbookScreen.Settings -> SettingsScreen(
                                     name = name,
                                     onName = { value -> name = value.take(40); prefs.edit().putString("name", name).apply() },
@@ -390,12 +381,7 @@ private fun LogbookApp(store: LocalStore) {
                                     onExport = { exportLauncher.launch("logbook_${SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())}.json") },
                                     onImport = { importLauncher.launch(arrayOf("application/json", "text/*")) },
                                     onClear = { confirmClear = true },
-                                    onIntro = { screen = LogbookScreen.Intro },
-                                    onHelp = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://vijayarkananduri.github.io/logbook/guide.html"))) },
-                                    startReminder = startReminder,
-                                    onStartReminder = { startReminder = it.take(5); prefs.edit().putString("reminder_start", startReminder).apply() },
-                                    endReminder = endReminder,
-                                    onEndReminder = { endReminder = it.take(5); prefs.edit().putString("reminder_end", endReminder).apply() }
+                                    onIntro = { screen = LogbookScreen.Intro }
                                 )
                                 else -> Unit
                             }
@@ -414,19 +400,6 @@ private fun LogbookApp(store: LocalStore) {
             )
         }
 
-        taskPrompt?.let { text ->
-            AlertDialog(
-                onDismissRequest = { taskPrompt = null },
-                title = { Text("When should I remind you?") },
-                text = { Text("One quick choice for: $text") },
-                confirmButton = { Row {
-                    TextButton(onClick = { finishPrompt(1) }) { Text("In 30 min") }
-                    TextButton(onClick = { finishPrompt(2) }) { Text("This evening") }
-                    TextButton(onClick = { finishPrompt(3) }) { Text("Tomorrow") }
-                } },
-                dismissButton = { TextButton(onClick = { finishPrompt(0) }) { Text("No reminder") } }
-            )
-        }
         selectedMemory?.let { memory ->
             AlertDialog(
                 onDismissRequest = { selectedMemory = null },
