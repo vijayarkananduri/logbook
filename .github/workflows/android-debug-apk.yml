@@ -26,6 +26,13 @@ jobs:
         run: |
           test -s app/build/outputs/apk/debug/app-debug.apk
           sha256sum app/build/outputs/apk/debug/app-debug.apk | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: logbook-debug-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
       - name: Publish latest debug APK to private release
         if: github.ref == 'refs/heads/main'
         env:
