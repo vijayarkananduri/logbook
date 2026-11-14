@@ -6,6 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -37,6 +39,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -190,15 +193,41 @@ internal fun CategoryChip(label: String, selected: Boolean, accent: Color, modif
 }
 
 @Composable
-internal fun MemoryCard(memory: Memory, onClick: () -> Unit) {
-    DewSurface(Modifier.fillMaxWidth(), onClick = onClick, shape = RoundedCornerShape(22.dp)) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-            Text(memory.text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 4, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(9.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(memory.tags.take(3).joinToString("  · ") { LogbookCategories[it] ?: it }, style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(formatDate(memory.created), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun SwipeToDeleteCard(id: String, onDelete: () -> Unit, content: @Composable () -> Unit) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val revealPx = with(density) { 96.dp.toPx() }
+    val thresholdPx = with(density) { 38.dp.toPx() }
+    var offsetX by remember(id) { mutableFloatStateOf(0f) }
+    Box(Modifier.fillMaxWidth()) {
+        Row(Modifier.matchParentSize().clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = 8.dp),
+            horizontalArrangement = if (offsetX > 0f) Arrangement.Start else Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onDelete, colors = TextButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                Icon(Icons.Rounded.DeleteOutline, null); Spacer(Modifier.width(4.dp)); Text("Delete")
+            }
+        }
+        Box(Modifier.fillMaxWidth().offset { IntOffset(offsetX.toInt(), 0) }
+            .pointerInput(id, revealPx, thresholdPx) {
+                detectHorizontalDragGestures(
+                    onHorizontalDrag = { change, amount -> change.consume(); offsetX = (offsetX + amount).coerceIn(-revealPx, revealPx) },
+                    onDragEnd = { offsetX = when { offsetX <= -thresholdPx -> -revealPx; offsetX >= thresholdPx -> revealPx; else -> 0f } },
+                    onDragCancel = { offsetX = 0f }
+                )
+            }) { content() }
+    }
+}
+
+@Composable
+internal fun MemoryCard(memory: Memory, onClick: () -> Unit, onDelete: () -> Unit) {
+    SwipeToDeleteCard(memory.id, onDelete) {
+        DewSurface(Modifier.fillMaxWidth(), onClick = onClick, shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                Text(memory.text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(9.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(memory.tags.take(3).joinToString("  · ") { LogbookCategories[it] ?: it }, style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(formatDate(memory.created), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }
@@ -206,20 +235,22 @@ internal fun MemoryCard(memory: Memory, onClick: () -> Unit) {
 
 @Composable
 internal fun TodoCard(task: Todo, onToggle: () -> Unit, onDelete: () -> Unit) {
-    DewSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-        Row(Modifier.fillMaxWidth().padding(start = 5.dp, end = 7.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(task.completed, onCheckedChange = { onToggle() }, modifier = Modifier.size(48.dp))
-            Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                Text(task.text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface,
-                    textDecoration = if (task.completed) TextDecoration.LineThrough else TextDecoration.None)
-                task.due?.let { due ->
-                    Spacer(Modifier.height(3.dp))
-                    Text((if (!task.completed && due < System.currentTimeMillis()) "Overdue · " else "") + formatDue(due),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (due < System.currentTimeMillis() && !task.completed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+    SwipeToDeleteCard(task.id, onDelete) {
+        DewSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+            Row(Modifier.fillMaxWidth().padding(start = 5.dp, end = 7.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(task.completed, onCheckedChange = { onToggle() }, modifier = Modifier.size(48.dp))
+                Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                    Text(task.text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface,
+                        textDecoration = if (task.completed) TextDecoration.LineThrough else TextDecoration.None)
+                    task.due?.let { due ->
+                        Spacer(Modifier.height(3.dp))
+                        Text((if (!task.completed && due < System.currentTimeMillis()) "Overdue · " else "") + formatDue(due),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (due < System.currentTimeMillis() && !task.completed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    }
                 }
+                IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.DeleteOutline, "Delete task", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
-            IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.DeleteOutline, "Delete task", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }
