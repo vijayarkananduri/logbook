@@ -7,7 +7,7 @@
 A private, local-first notebook for Android.
 Write a thought, find it later, and keep the next step in motion.
 
-[Visit the website](https://vijayarkananduri.github.io/logbook/) · [Read the guide](https://vijayarkananduri.github.io/logbook/guide.html) · [Get Logbook](https://github.com/vijayarkananduri/logbook/releases/latest)
+[Visit the website](https://vijayarkananduri.github.io/logbook/) · [Read the guide](https://vijayarkananduri.github.io/logbook/guide.html) · [Get Logbook](https://github.com/vijayarkananduri/logbook/releases/latest) · [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 <img src="docs/assets/home.jpg" width="190" alt="Logbook home screen" />
 <img src="docs/assets/scan.jpg" width="190" alt="Review a thought and choose a task date" />
@@ -60,3 +60,7 @@ Kotlin, Jetpack Compose, Material 3, and SQLCipher.
 ## Keep your data safe
 
 JSON exports contain your personal writing, so choose a destination you trust. Export a copy before uninstalling: removing the app or losing its Android Keystore key can make the encrypted local database unavailable.
+
+## License
+
+Logbook is open source under the [MIT License](LICENSE).
