@@ -539,7 +539,7 @@ internal fun PreviewScreen(
 internal fun StickyNoteSheet(memory: Memory, onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, onDone: () -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.34f)).clickable { onDismiss() }, contentAlignment = Alignment.BottomCenter) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 34.dp)
                 .clip(RoundedCornerShape(26.dp)).background(if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color(0xFF3A2F27) else Color(0xFFFFF1B8))
                 .clickable { }.padding(horizontal = 22.dp, vertical = 20.dp)) {
                 Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)))

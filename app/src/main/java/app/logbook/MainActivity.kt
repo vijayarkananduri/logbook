@@ -68,6 +68,8 @@ private fun LogbookApp(store: LocalStore) {
     var morningMinute by remember { mutableIntStateOf(prefs.getInt("morning_minute", 0)) }
     var eveningHour by remember { mutableIntStateOf(prefs.getInt("evening_hour", 20)) }
     var eveningMinute by remember { mutableIntStateOf(prefs.getInt("evening_minute", 0)) }
+    var onboardingPermissionFlow by remember { mutableStateOf(false) }
+    var requestMicrophoneAfterNotification by remember { mutableStateOf(false) }
     val dark = when (themeMode) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
     var screen by remember { mutableStateOf(if (prefs.getBoolean("onboarded", name.isNotBlank())) LogbookScreen.Home else LogbookScreen.Welcome) }
     var memories by remember { mutableStateOf(emptyList<Memory>()) }
@@ -131,8 +133,9 @@ private fun LogbookApp(store: LocalStore) {
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             scope.launch(Dispatchers.IO) { LocalStore(context).todos().filter { !it.completed }.forEach { scheduleReminder(context, it) } }
-            toast("Notifications are on for your local reminders")
-        } else toast("Task saved. Allow notifications in Android settings to receive reminders.")
+            if (onboardingPermissionFlow) requestMicrophoneAfterNotification = true else toast("Notifications are on for your local reminders")
+        } else if (onboardingPermissionFlow) requestMicrophoneAfterNotification = true
+        else toast("Task saved. Allow notifications in Android settings to receive reminders.")
     }
     fun askForNotificationsIfNeeded(hasDueTime: Boolean) {
         if (hasDueTime && Build.VERSION.SDK_INT >= 33 &&
@@ -204,7 +207,27 @@ private fun LogbookApp(store: LocalStore) {
     }
 
     val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) beginVoiceCapture() else micStatus = "Microphone permission is off. You can still type your thought."
+        if (onboardingPermissionFlow) {
+            onboardingPermissionFlow = false
+            toast(if (granted) "You’re ready to write or speak." else "You can type anytime; microphone stays optional.")
+        } else if (granted) beginVoiceCapture() else micStatus = "Microphone permission is off. You can still type your thought."
+    }
+    LaunchedEffect(requestMicrophoneAfterNotification) {
+        if (requestMicrophoneAfterNotification) {
+            requestMicrophoneAfterNotification = false
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+            } else {
+                onboardingPermissionFlow = false
+                toast("You’re ready to write or speak.")
+            }
+        }
+    }
+    fun requestOnboardingPermissions() {
+        onboardingPermissionFlow = true
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else requestMicrophoneAfterNotification = true
     }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) scope.launch {
@@ -349,6 +372,7 @@ private fun LogbookApp(store: LocalStore) {
                     LogbookScreen.Intro -> IntroScreen {
                         prefs.edit().putBoolean("onboarded", true).apply()
                         screen = LogbookScreen.Home
+                        requestOnboardingPermissions()
                     }
                     LogbookScreen.Compose -> ComposerScreen(
                         text = composerText,

@@ -1,27 +1,35 @@
 # Logbook for Android
 
-Logbook is a private, local-first mind space. Catch a thought, review its suggested shelves, find it again, and move an explicit next step into Things in motion. The app uses a warm paper-and-ink identity with pumpkin, amber, husky grey, rust, mango and lime accents; Urbanist body text; and Caveat display headings.
+Logbook is a private place to catch thoughts before they disappear. Write an idea, save a link, capture a feeling, remember a person, or turn a clear next step into a task. It is designed to feel like a calm paper notebook with useful structure underneath.
+
+## What it does
+
+- **Capture:** write or speak a thought using Android’s on-device speech recognition when available.
+- **Review:** edit the thought, keep or remove suggested labels, and optionally create a task.
+- **Find:** search words, links, people, dates, shelves, and recurring topics.
+- **Connect:** browse hubs for people, projects, and topics that keep appearing.
+- **Friendly nudges:** optional shuffled morning and evening check-ins. Morning messages include the real number of open tasks when useful; evening messages ask how the day went. They are not task reminders, and both times can be changed in Settings.
+- **Private export:** export or import a JSON copy when you choose.
+- **Warm interface:** opaque paper surfaces, gentle depth, sticky-note detail views, light/dark themes, and a simple splash built around the Logbook mark.
+
+## How it works
+
+Logbook is local-first. Thoughts and tasks are stored in an encrypted SQLCipher database on the device. The app has no account, sync, ads, analytics, network AI, or remote speech fallback. Search, labels, date detection, task suggestions, related-thought matching, hubs, and nudge wording all run locally through deterministic rules.
+
+When a note looks like an action—such as “call Maya Friday” or “remember to send the file”—Logbook can suggest a task and a local alarm. Nothing is scheduled until you choose to save it. Completed, deleted, and cleared tasks cancel their alarms, and unfinished alarms are restored after reboot.
+
+On first onboarding, Logbook asks for **notifications** so local task alarms and friendly nudges can reach you, and **microphone** access so you can dictate a thought. Both are optional: typing and the rest of the app still work if either permission is declined.
 
 ## Build and download
 
-The **Build debug APK** GitHub Actions workflow builds `app-debug.apk` on pushes to `main` or via **Actions → Build debug APK → Run workflow**. It publishes the latest APK as an asset on the private `logbook-debug-latest` GitHub release. The repository and asset remain private. This is an unsigned debug build, not a production release.
+Pushes to `main` run the **Build debug APK** GitHub Actions workflow. A successful run publishes the unsigned testing APK to the private `logbook-debug-latest` release. It is for development and testing, not a production release.
 
-## Privacy and offline behavior
+```sh
+gradle --no-daemon :app:assembleDebug
+```
 
-- The Android manifest intentionally has **no `INTERNET` permission**. There are no accounts, sync, analytics, ads, network AI or remote speech fallback.
-- Memories and tasks use SQLCipher. The database passphrase is wrapped with an Android Keystore AES-GCM key. Loss of that key makes the encrypted database unreadable; uninstalling removes local records. Automatic cloud/device backup is disabled. JSON export is the user-controlled portability path.
-- Voice is foreground-only and uses Android's on-device recognizer only when Android 12+ reports an installed on-device model. Otherwise, Logbook explains the limitation and keeps text entry available. Review the transcript before saving.
-- Reminder alarms are local. Android 13+ notification permission is requested only when a dated task needs an alert. Completed, deleted and cleared tasks have their pending alarms cancelled; unfinished alarms are restored after reboot.
-- JSON files contain personal writing. Choose a destination you trust; a document picker may offer cloud-backed providers even though Logbook itself does not upload the file.
+The output is `app/build/outputs/apk/debug/app-debug.apk`.
 
-## Product behavior
+## Privacy notes
 
-- The home screen surfaces a capture action, today's thought count, open-task count and recent memories.
-- Search ranks matches across thought text, categories and locally extracted attributes. Category suggestions, name/link/date extraction, deadline parsing and the local guide are deterministic rules, not generative AI.
-- A captured thought is reviewed before it is saved. Possible actions can be optionally added to Tasks in the same database transaction as the thought.
-- The interface supports warm light/dark themes and six accent choices. Liquid-glass sheen and lift are optional; reduced-effects mode uses flatter surfaces without blur or shadows.
-- JSON import/export, profile name, onboarding replay and clear-all controls are available in Settings.
-
-## Validation notes
-
-CI verifies that the debug APK compiles and is published. A successful build does not prove device/runtime behavior. Validate on physical devices, especially on-device speech model availability, Android notification permissions, reminder delivery across reboot, SQLCipher key lifecycle, import/export rollback, TalkBack, large text and reduced-effects performance.
+The manifest intentionally has no `INTERNET` permission. Automatic cloud/device backup is disabled. JSON exports contain personal writing, so choose a destination you trust. Losing the Android Keystore key or uninstalling the app can make the encrypted local database unavailable.
