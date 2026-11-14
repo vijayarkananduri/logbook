@@ -46,7 +46,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-internal enum class LogbookScreen { Welcome, Intro, Home, Search, Tasks, Guide, Settings, Compose, Preview }
+internal enum class LogbookScreen { Welcome, Intro, Home, Search, Hubs, Tasks, Guide, Settings, Compose, Preview }
 internal data class ChatLine(val fromUser: Boolean, val text: String)
 
 internal val LogbookBody = FontFamily(
@@ -57,7 +57,7 @@ internal val LogbookHand = FontFamily(Font(R.font.bebas_neue, FontWeight.Normal)
 internal val LogbookCategories = linkedMapOf(
     "ideas" to "Ideas", "projects" to "Projects", "emotions" to "Feelings",
     "links" to "Links", "code" to "Code", "life" to "Life",
-    "persons" to "People", "refs" to "References"
+    "persons" to "People", "refs" to "Files"
 )
 
 
@@ -128,21 +128,22 @@ internal fun DewSurface(
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
-        modifier.clip(shape)
-            .background(tone)
+        modifier.shadow(if (MaterialTheme.colorScheme.background.luminance() < 0.5f) 2.dp else 3.dp, shape)
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(tone.copy(alpha = 0.97f), tone, tone.copy(alpha = 0.99f))))
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
     ) { content() }
 }
 
 @Composable
-internal fun BrandBar(name: String, onSettings: () -> Unit) {
+internal fun BrandBar(name: String, onGuide: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 5.dp, bottom = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("logbook", style = MaterialTheme.typography.titleMedium, fontFamily = LogbookBody, letterSpacing = 0.4.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text("logbook", style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), letterSpacing = 0.2.sp, color = MaterialTheme.colorScheme.primary)
             Text("your private mind space", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        IconButton(onClick = onSettings, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.Settings, "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+        IconButton(onClick = onGuide, modifier = Modifier.size(48.dp).semantics { contentDescription = "Open private Guide" }) { Icon(Icons.Rounded.ChatBubbleOutline, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
 
@@ -169,14 +170,15 @@ internal fun EntryField(value: String, onValue: (String) -> Unit, hint: String, 
 internal fun PrimaryAction(label: String, accent: Color, onClick: () -> Unit, enabled: Boolean = true) {
     Button(onClick, Modifier.fillMaxWidth().defaultMinSize(minHeight = 52.dp), enabled = enabled, shape = RoundedCornerShape(17.dp),
         colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = if (accent.luminance() > 0.34f) Ink else Color.White),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp, focusedElevation = 0.dp, hoveredElevation = 0.dp)) {
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 5.dp, focusedElevation = 3.dp, hoveredElevation = 3.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }
 
 @Composable
 internal fun SecondaryAction(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    OutlinedButton(onClick, modifier.defaultMinSize(minHeight = 48.dp), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
+    OutlinedButton(onClick, modifier.defaultMinSize(minHeight = 48.dp), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 1.dp, pressedElevation = 3.dp)) {
         Icon(icon, null, Modifier.size(19.dp)); Spacer(Modifier.width(7.dp))
         Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
@@ -184,7 +186,7 @@ internal fun SecondaryAction(label: String, icon: ImageVector, onClick: () -> Un
 
 @Composable
 internal fun CategoryChip(label: String, selected: Boolean, accent: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(modifier.defaultMinSize(minHeight = 48.dp).clip(CircleShape)
+    Box(modifier.defaultMinSize(minHeight = 48.dp).shadow(if (selected) 2.dp else 0.dp, CircleShape).clip(CircleShape)
         .background(if (selected) accent else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f))
         .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 13.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
         Text(label, color = if (selected) (if (accent.luminance() > 0.34f) Ink else Color.White) else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -217,15 +219,21 @@ private fun SwipeToDeleteCard(id: String, onDelete: () -> Unit, content: @Compos
 }
 
 @Composable
-internal fun MemoryCard(memory: Memory, onClick: () -> Unit, onDelete: () -> Unit) {
+internal fun MemoryCard(memory: Memory, onClick: () -> Unit, onDelete: () -> Unit, onTagClick: ((String) -> Unit)? = null) {
     SwipeToDeleteCard(memory.id, onDelete) {
         DewSurface(Modifier.fillMaxWidth(), onClick = onClick, shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
                 Text(memory.text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(9.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(memory.tags.take(3).joinToString("  · ") { LogbookCategories[it] ?: it }, style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        memory.tags.take(3).forEach { tag ->
+                            Text(LogbookCategories[tag] ?: tag, style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                                    .then(if (onTagClick != null) Modifier.clickable { onTagClick(tag) } else Modifier).padding(horizontal = 8.dp, vertical = 4.dp))
+                        }
+                    }
                     Text(formatDate(memory.created), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -281,11 +289,12 @@ internal fun SettingToggle(icon: ImageVector, title: String, description: String
 internal fun BottomNavigation(screen: LogbookScreen, onSelect: (LogbookScreen) -> Unit) {
     val destinations = listOf(
         Triple(LogbookScreen.Home, "Home", Icons.Rounded.Home),
-        Triple(LogbookScreen.Tasks, "Tasks", Icons.Rounded.CheckCircle),
-        Triple(LogbookScreen.Guide, "Guide", Icons.Rounded.Chat)
+        Triple(LogbookScreen.Search, "Search", Icons.Rounded.Search),
+        Triple(LogbookScreen.Hubs, "Hubs", Icons.Rounded.Hub),
+        Triple(LogbookScreen.Settings, "Settings", Icons.Rounded.Settings)
     )
     val selectedScreen = when (screen) {
-        LogbookScreen.Search, LogbookScreen.Settings -> LogbookScreen.Home
+        LogbookScreen.Tasks, LogbookScreen.Guide, LogbookScreen.Compose, LogbookScreen.Preview, LogbookScreen.Intro -> LogbookScreen.Home
         else -> screen
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 5.dp).clip(RoundedCornerShape(18.dp))
@@ -294,13 +303,13 @@ internal fun BottomNavigation(screen: LogbookScreen, onSelect: (LogbookScreen) -
         horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         destinations.forEach { (destination, label, icon) ->
             val selected = selectedScreen == destination
-            Column(Modifier.weight(1f).heightIn(min = 50.dp).clip(RoundedCornerShape(14.dp))
+            Column(Modifier.weight(1f).heightIn(min = 54.dp).clip(RoundedCornerShape(14.dp))
                 .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
                 .clickable(role = Role.Tab) { onSelect(destination) }
-                .padding(vertical = 5.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(icon, null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                Text(label, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                .semantics { contentDescription = if (selected) "$label selected" else label }
+                .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Icon(icon, null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                if (selected) Text(label, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, maxLines = 1)
             }
         }
     }

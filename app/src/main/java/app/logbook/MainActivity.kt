@@ -67,6 +67,8 @@ private fun LogbookApp(store: LocalStore) {
     var todos by remember { mutableStateOf(emptyList<Todo>()) }
     var query by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("all") }
+    var selectedHub by remember { mutableStateOf<EntityHub?>(null) }
+    var showSplash by remember { mutableStateOf(true) }
     var composerText by remember { mutableStateOf("") }
     var previewTags by remember { mutableStateOf(listOf("ideas")) }
     var addTaskWithMemory by remember { mutableStateOf(false) }
@@ -191,7 +193,7 @@ private fun LogbookApp(store: LocalStore) {
                         ?: error("Could not open the selected destination")
                 }
                 toast("Private JSON export saved")
-            }.onFailure { toast("Export failed. Your Logbook is unchanged.") }
+            }.onFailure { toast("Export failed. Your logbook is unchanged.") }
         }
     }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -206,7 +208,7 @@ private fun LogbookApp(store: LocalStore) {
                 prefs.edit().putString("name", importedName).apply()
                 refresh()
                 toast("Import complete. Existing matching IDs were kept safe.")
-            }.onFailure { toast("Import failed. Check that this is a Logbook JSON file.") }
+            }.onFailure { toast("Import failed. Check that this is a logbook JSON file.") }
         }
     }
 
@@ -278,7 +280,8 @@ private fun LogbookApp(store: LocalStore) {
     }
 
     BackHandler(enabled = screen != LogbookScreen.Home && screen != LogbookScreen.Welcome) {
-        screen = when (screen) {
+        if (screen == LogbookScreen.Hubs && selectedHub != null) selectedHub = null
+        else screen = when (screen) {
             LogbookScreen.Preview -> LogbookScreen.Compose
             LogbookScreen.Compose -> LogbookScreen.Home
             LogbookScreen.Intro -> LogbookScreen.Welcome
@@ -326,7 +329,10 @@ private fun LogbookApp(store: LocalStore) {
                             else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
                         },
                         onStop = { recognizer?.stopListening(); micStatus = "Transcript ready to review." },
-                        micStatus = micStatus
+                        micStatus = micStatus,
+                        memories = memories,
+                        excludeId = editingMemory?.id,
+                        onRelated = { tag -> query = ""; category = tag; screen = LogbookScreen.Search }
                     )
                     LogbookScreen.Preview -> PreviewScreen(
                         text = composerText,
@@ -337,15 +343,22 @@ private fun LogbookApp(store: LocalStore) {
                         addTask = addTaskWithMemory,
                         onAddTask = { addTaskWithMemory = it },
                         onBack = { screen = LogbookScreen.Compose },
-                        onSave = { saveThought(addTaskWithMemory) }
+                        onSave = { saveThought(addTaskWithMemory) },
+                        similar = SmartNlp.similarMemories(composerText, memories, editingMemory?.id, 2),
+                        onRelated = { tag -> query = ""; category = tag; screen = LogbookScreen.Search }
                     )
                     else -> Box(Modifier.fillMaxSize()) {
                         Column(Modifier.fillMaxSize()) {
-                            BrandBar(name) { screen = LogbookScreen.Settings }
+                            BrandBar(name) { screen = LogbookScreen.Guide }
                             AnimatedContent(targetState = screen, modifier = Modifier.weight(1f), transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "logbook-screen") { route ->
                                 when (route) {
-                                    LogbookScreen.Home -> HomeScreen(name, memories, todos, { selectedMemory = it }, { memoryToDelete = it }, { screen = LogbookScreen.Search })
+                                    LogbookScreen.Home -> HomeScreen(name, memories, todos, { selectedMemory = it }, { memoryToDelete = it },
+                                        { query = ""; category = "all"; screen = LogbookScreen.Search }, { screen = LogbookScreen.Tasks },
+                                        { task -> val updated = task.copy(completed = true); scope.launch {
+                                            withContext(Dispatchers.IO) { store.saveTodo(updated); cancelReminder(context, updated.id) }; refresh()
+                                        } }, { tag -> query = ""; category = tag; screen = LogbookScreen.Search })
                                     LogbookScreen.Search -> SearchScreen(memories, query, { query = it }, category, { category = it }, { selectedMemory = it }, { memoryToDelete = it })
+                                    LogbookScreen.Hubs -> HubsScreen(memories, selectedHub, { selectedHub = it }, { selectedMemory = it })
                                     LogbookScreen.Tasks -> TasksScreen(todos, taskDraft, { taskDraft = it },
                                         { if (taskDraft.isNotBlank()) { saveTask(taskDraft); taskDraft = "" } },
                                         { task -> val updated = task.copy(completed = !task.completed); scope.launch {
@@ -365,7 +378,7 @@ private fun LogbookApp(store: LocalStore) {
                             }
                             BottomNavigation(screen) { screen = it }
                         }
-                        if (screen != LogbookScreen.Settings) Column(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 82.dp), verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.End) {
+                        if (screen == LogbookScreen.Home || screen == LogbookScreen.Search) Column(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 82.dp), verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.End) {
                             if (screen != LogbookScreen.Search) SmallFloatingActionButton(onClick = { screen = LogbookScreen.Search }, containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.primary) { Icon(Icons.Rounded.Search, "Search") }
                             FloatingActionButton(onClick = { startCapture() }, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) { Icon(Icons.Rounded.Add, "Add a thought") }
                         }
@@ -380,6 +393,7 @@ private fun LogbookApp(store: LocalStore) {
                 color = androidx.compose.ui.graphics.Color.White,
                 style = MaterialTheme.typography.bodyMedium
             )
+            if (showSplash) BootSplash { showSplash = false }
         }
 
         selectedMemory?.let { memory ->
@@ -420,7 +434,7 @@ private fun LogbookApp(store: LocalStore) {
         ) }
         if (confirmClear) AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("Clear your Logbook?") },
+            title = { Text("Clear your logbook?") },
             text = { Text("All saved thoughts and tasks on this device will be deleted. Export a JSON copy first if you may want them later.") },
             confirmButton = { TextButton(onClick = {
                 confirmClear = false
@@ -428,7 +442,7 @@ private fun LogbookApp(store: LocalStore) {
                     withContext(Dispatchers.IO) { cancelAllReminders(context, todos); store.clear() }
                     memories = emptyList()
                     todos = emptyList()
-                    toast("Your local Logbook is clear")
+                    toast("Your local logbook is clear")
                 }
             }) { Text("Delete everything", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } }
