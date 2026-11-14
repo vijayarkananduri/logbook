@@ -2,10 +2,9 @@
 
 # Logbook
 
-**Catch the thought before it disappears.**
+**Your private second brain for thoughts and next steps.**
 
-A private, local-first notebook for Android.
-Write a thought, find it later, and keep the next step in motion.
+Capture an idea, reconnect it to what you have saved, and keep what matters in view—all on your phone.
 
 [Visit the website](https://vijayarkananduri.github.io/logbook/) · [Read the guide](https://vijayarkananduri.github.io/logbook/guide.html) · [Get Logbook](https://github.com/vijayarkananduri/logbook/releases/latest) · [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -17,18 +16,18 @@ Write a thought, find it later, and keep the next step in motion.
 
 ---
 
-## A little room for your thoughts
+## Your thoughts, connected
 
-Logbook is a calm paper-like notebook with useful structure underneath. Capture an idea, link, feeling, person, or task; keep the labels that fit; and find it again by words, dates, people, shelves, or recurring topics.
+Logbook is a private second brain for Android. As you write, it can surface related thoughts from what you have already saved. Home keeps today’s thought count and open tasks in view, while search and hubs help you return to ideas, people, projects, and topics later. Matching is local keyword and phrase logic—not cloud AI or automatic duplicate blocking.
 
 ## What it does
 
 - **Capture:** write a thought or dictate with Android on-device speech recognition when available.
-- **Review:** edit your words and keep, remove, or add suggested shelves before saving.
+- **Reconnect:** see up to two locally matched related thoughts while composing or reviewing, then choose whether to revisit them.
 - **Find:** search notes by text, links, people, dates, shelves, and topics.
 - **Connect:** browse hubs for people, projects, and topics that recur in your notes.
-- **Keep tasks moving:** turn a clear next step into a task, choose a due date before saving, or explicitly save it without one.
-- **Gentle check-ins:** optional morning and evening nudges, with adjustable times. They are separate from task alarms.
+- **Keep tasks moving:** when local rules notice action wording, choose whether to make a task; set a due date or explicitly save without one.
+- **See the day clearly:** Home shows how many thoughts you caught today and how many tasks remain open, with up to two tasks at a glance. Optional morning and evening check-ins are separate from task alarms.
 - **Take your writing with you:** export or import a JSON copy whenever you choose.
 
 ## Private by design
