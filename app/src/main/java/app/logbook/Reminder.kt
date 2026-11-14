@@ -46,7 +46,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
-                NotificationChannel("logbook_reminders", "Logbook reminders", NotificationManager.IMPORTANCE_DEFAULT)
+                NotificationChannel("logbook_reminders", "logbook reminders", NotificationManager.IMPORTANCE_DEFAULT)
             )
         }
         val text = intent.getStringExtra("text")?.take(140) ?: "A note to yourself is ready."

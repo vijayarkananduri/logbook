@@ -51,6 +51,53 @@ class LocalStore(ctx:Context):SQLiteOpenHelper(ctx.applicationContext,"logbook.d
     fun deleteTodo(id:String){db().execSQL("DELETE FROM todos WHERE id=?",arrayOf(id))}
     fun clear(){db().beginTransaction();try{db().execSQL("DELETE FROM memories");db().execSQL("DELETE FROM todos");db().setTransactionSuccessful()}finally{db().endTransaction()}}
     fun export(name:String):String{val ms=JSONArray();memories().forEach{m->ms.put(JSONObject().put("id",m.id).put("text",m.text).put("tags",JSONArray(m.tags)).put("tag",m.tags.firstOrNull()?:"ideas").put("attributes",JSONArray(m.attributes)).put("created",m.created))};val ts=JSONArray();todos().forEach{t->val j=JSONObject().put("id",t.id).put("text",t.text).put("dueDate",t.due?:JSONObject.NULL).put("category",t.category).put("completed",t.completed).put("created",t.created).put("memoryId",t.memoryId?:JSONObject.NULL);ts.put(j)};return JSONObject().put("memories",ms).put("todos",ts).put("userName",name).put("exported",java.time.Instant.now().toString()).toString(2)}
-    fun import(json:String,currentName:String):String {val root=JSONObject(json);require(root.has("memories")&&root.get("memories") is JSONArray){"The JSON file must contain a memories array."};val incoming=root.getJSONArray("memories");val todoArray=root.optJSONArray("todos");val db=db();db.beginTransaction();try{val seen=hashSetOf<String>();for(i in 0 until incoming.length()){val j=incoming.getJSONObject(i);val id=j.getString("id");require(id.isNotBlank()&&seen.add(id)){"Duplicate or empty memory ID."};val text=j.getString("text").trim();require(text.isNotEmpty());val tags=j.optJSONArray("tags")?:JSONArray().put(j.optString("tag","ideas"));require(tags.length()>0);val attrs=j.optJSONArray("attributes")?:JSONArray();val tagList=(0 until tags.length()).map{tags.getString(it)};val atList=(0 until attrs.length()).map{attrs.getString(it)};db.execSQL("INSERT OR IGNORE INTO memories VALUES(?,?,?,?,?)",arrayOf(id,text,JSONArray(tagList).toString(),JSONArray(atList).toString(),j.getLong("created")))};if(todoArray!=null){db.execSQL("DELETE FROM todos");val ids=hashSetOf<String>();for(i in 0 until todoArray.length()){val j=todoArray.getJSONObject(i);val id=j.getString("id");require(ids.add(id)){"Duplicate todo ID."};db.execSQL("INSERT INTO todos VALUES(?,?,?,?,?,?,?)",arrayOf(id,j.getString("text"),if(j.isNull("dueDate"))null else j.getLong("dueDate"),j.optString("category","life"),if(j.optBoolean("completed"))1 else 0,j.getLong("created"),if(j.isNull("memoryId"))null else j.optString("memoryId")))}};db.setTransactionSuccessful()}finally{db.endTransaction()};return if(currentName.isBlank())root.optString("userName","") else currentName}
+    fun import(json:String,currentName:String):String {
+        val root=JSONObject(json)
+        require(root.has("memories") && root.get("memories") is JSONArray) { "The JSON file must contain a memories array." }
+        val incoming=root.getJSONArray("memories")
+        val todoArray=root.optJSONArray("todos")
+        val legacyTaskIds=root.optJSONArray("tasks")?.let { ids -> (0 until ids.length()).mapNotNull { ids.optString(it).takeIf { value -> value.isNotBlank() } }.toSet() } ?: emptySet()
+        val writable=db()
+        writable.beginTransaction()
+        try {
+            val seen=hashSetOf<String>()
+            for(i in 0 until incoming.length()) {
+                val j=incoming.getJSONObject(i)
+                val id=j.getString("id")
+                require(id.isNotBlank() && seen.add(id)) { "Duplicate or empty memory ID." }
+                val text=j.getString("text").trim()
+                require(text.isNotEmpty())
+                val tags=j.optJSONArray("tags") ?: JSONArray().put(j.optString("tag","ideas"))
+                require(tags.length()>0)
+                val attrs=j.optJSONArray("attributes") ?: JSONArray()
+                val tagList=(0 until tags.length()).map { tags.getString(it) }
+                val atList=(0 until attrs.length()).map { attrs.getString(it) }
+                writable.execSQL("INSERT OR IGNORE INTO memories VALUES(?,?,?,?,?)", arrayOf(id,text,JSONArray(tagList).toString(),JSONArray(atList).toString(),j.getLong("created")))
+            }
+            if(todoArray!=null) {
+                writable.execSQL("DELETE FROM todos")
+                val ids=hashSetOf<String>()
+                for(i in 0 until todoArray.length()) {
+                    val j=todoArray.getJSONObject(i)
+                    val id=j.getString("id")
+                    require(ids.add(id)) { "Duplicate todo ID." }
+                    writable.execSQL("INSERT INTO todos VALUES(?,?,?,?,?,?,?)", arrayOf(id,j.getString("text"),if(j.isNull("dueDate")) null else j.getLong("dueDate"),j.optString("category","life"),if(j.optBoolean("completed")) 1 else 0,j.getLong("created"),if(j.isNull("memoryId")) null else j.optString("memoryId")))
+                }
+            } else {
+                for(i in 0 until incoming.length()) {
+                    val j=incoming.getJSONObject(i)
+                    val memoryId=j.getString("id")
+                    if(j.optBoolean("isTodo") || memoryId in legacyTaskIds) {
+                        val tags=j.optJSONArray("tags")
+                        val category=tags?.optString(0)?.takeIf { it.isNotBlank() } ?: j.optString("tag","life").takeIf { it.isNotBlank() } ?: "life"
+                        val todoId="legacy_$memoryId"
+                        writable.execSQL("INSERT OR IGNORE INTO todos VALUES(?,?,?,?,?,?,?)", arrayOf(todoId,j.getString("text").trim(),null,category,if(j.optBoolean("completed")) 1 else 0,j.optLong("created",System.currentTimeMillis()),memoryId))
+                    }
+                }
+            }
+            writable.setTransactionSuccessful()
+        } finally { writable.endTransaction() }
+        return if(currentName.isBlank()) root.optString("userName","") else currentName
+    }
 }
 private fun strList(s:String)=try{val a=JSONArray(s);(0 until a.length()).map{a.getString(it)}}catch(_:Exception){emptyList()}

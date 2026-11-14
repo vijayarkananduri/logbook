@@ -1,6 +1,10 @@
 package app.logbook
 
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,12 +21,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.painterResource
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -31,11 +40,19 @@ import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun WelcomeScreen(name: String, onName: (String) -> Unit, onContinue: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center) {
-        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.ic_logbook), "Logbook mark", Modifier.size(70.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.logbook_logo), "logbook logo", Modifier.size(52.dp))
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("logbook", style = MaterialTheme.typography.titleLarge.copy(fontFamily = LogbookBody, fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
+                Text("your private mind space", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         Spacer(Modifier.height(22.dp))
         Text("A little room\nfor your thoughts.", fontFamily = LogbookHand, fontSize = 42.sp, lineHeight = 46.sp, color = MaterialTheme.colorScheme.onBackground)
         Spacer(Modifier.height(14.dp))
@@ -51,18 +68,41 @@ internal fun WelcomeScreen(name: String, onName: (String) -> Unit, onContinue: (
 
 @Composable
 internal fun IntroScreen(onStart: () -> Unit) {
+    val features = listOf(
+        Triple(Icons.Rounded.EditNote, "Catch the whole thought", "Save fragments, plans, links, feelings, and reminders. Write freely first; decide what matters after."),
+        Triple(Icons.Rounded.AutoAwesome, "Get several useful tags", "Local phrase rules can suggest more than one shelf at once. Review each suggestion, keep what fits, and add your own labels."),
+        Triple(Icons.Rounded.Search, "Find ideas by words or tags", "Search checks note text, labels, people, links, and dates. Tap a tag to browse the notes on that shelf."),
+        Triple(Icons.Rounded.Hub, "Notice what connects", "People, projects, and recurring topics gather into hubs as your notes grow."),
+        Triple(Icons.Rounded.CheckCircle, "Turn a thought into a next step", "Task wording and dates can suggest a reminder. Nothing is scheduled until you choose to save it."),
+        Triple(Icons.Rounded.Lock, "Keep it on this device", "Your notes stay in the encrypted local database. Tagging and chat use predictable on-device rules, not a cloud AI.")
+    )
+    var revealed by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        features.indices.forEach { index ->
+            delay(90)
+            revealed = index + 1
+        }
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
-        Text("A place to put it down.", fontFamily = LogbookHand, fontSize = 36.sp, color = MaterialTheme.colorScheme.onBackground)
-        Spacer(Modifier.height(8.dp))
-        Text("Logbook helps you remember what matters without asking you to organize everything first.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(22.dp))
-        IntroCard(Icons.Rounded.EditNote, "Catch it", "Write or try on-device voice. Read the transcript before you save it.")
-        Spacer(Modifier.height(12.dp))
-        IntroCard(Icons.Rounded.AutoAwesome, "Let it sort itself", "A small, predictable on-device helper suggests categories, links, dates and names. You stay in charge.")
-        Spacer(Modifier.height(12.dp))
-        IntroCard(Icons.Rounded.Lock, "Keep it yours", "Thoughts are encrypted on this device. There is no account, sync, analytics or remote AI.")
-        Spacer(Modifier.height(28.dp))
-        PrimaryAction("Open my Logbook", MaterialTheme.colorScheme.primary, onStart)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.logbook_logo), "logbook logo", Modifier.size(48.dp))
+            Spacer(Modifier.width(11.dp))
+            Column {
+                Text("A little room for it all.", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
+                Text("A quick tour · about 30 seconds", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.height(9.dp))
+        Text("Catch it now. Let logbook help you connect and find it later.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(14.dp))
+        features.forEachIndexed { index, feature ->
+            AnimatedVisibility(visible = index < revealed, enter = fadeIn(tween(260)) + slideInVertically(tween(260)) { it / 5 }) {
+                IntroCard(feature.first, feature.second, feature.third)
+            }
+            if (index < features.lastIndex) Spacer(Modifier.height(8.dp))
+        }
+        Spacer(Modifier.height(16.dp))
+        PrimaryAction("Open logbook", MaterialTheme.colorScheme.primary, onStart)
     }
 }
 
@@ -82,29 +122,36 @@ private fun IntroCard(icon: androidx.compose.ui.graphics.vector.ImageVector, tit
 }
 
 @Composable
-internal fun HomeScreen(name: String, memories: List<Memory>, todos: List<Todo>, onCapture: () -> Unit, onMemory: (Memory) -> Unit, onSearch: () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp)) {
+internal fun HomeScreen(name: String, memories: List<Memory>, todos: List<Todo>, onMemory: (Memory) -> Unit, onDelete: (Memory) -> Unit, onSearch: () -> Unit, onTasks: () -> Unit, onToggleTask: (Todo) -> Unit, onTagClick: (String) -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp).padding(bottom = 88.dp)) {
         Text(greeting(name), fontFamily = LogbookHand, fontSize = 34.sp, lineHeight = 40.sp, color = MaterialTheme.colorScheme.onBackground)
         Text(SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(Date()), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(18.dp))
-        DewSurface(Modifier.fillMaxWidth(), tone = MaterialTheme.colorScheme.primaryContainer, onClick = onCapture) {
-            Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Make room for a thought", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
-                    Spacer(Modifier.height(5.dp))
-                    Text("Capture first. Decide what it means after.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(13.dp))
-                    Text("Write a thought  →", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                }
-                Box(Modifier.size(54.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.EditNote, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
-                }
-            }
-        }
-        Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StatTile("TODAY", memories.count { isToday(it.created) }.toString(), "thoughts caught", Icons.Rounded.AutoAwesome, Modifier.weight(1f))
             StatTile("IN MOTION", todos.count { !it.completed }.toString(), "open tasks", Icons.Rounded.CheckCircle, Modifier.weight(1f))
+        }
+        val openTasks = todos.filterNot { it.completed }.take(2)
+        if (openTasks.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Things in motion", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
+                TextButton(onClick = onTasks) { Text("See all") }
+            }
+            DewSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                    openTasks.forEachIndexed { index, task ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = false, onCheckedChange = { onToggleTask(task) })
+                            Column(Modifier.weight(1f)) {
+                                Text(task.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                task.due?.let { Text(formatDue(it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            }
+                        }
+                        if (index < openTasks.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(22.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -114,16 +161,15 @@ internal fun HomeScreen(name: String, memories: List<Memory>, todos: List<Todo>,
         if (memories.isEmpty()) {
             DewSurface(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(19.dp)) {
-                    Text("The page is yours.", fontFamily = LogbookHand, fontSize = 27.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text("Nothing here yet.", fontFamily = LogbookHand, fontSize = 27.sp, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(Modifier.height(3.dp))
-                    Text("A line, a link, a feeling, a half-formed idea. Start wherever you are.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Use the + button whenever you want to save a thought.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-        } else memories.take(4).forEachIndexed { index, memory ->
+        } else memories.take(5).forEachIndexed { index, memory ->
             if (index > 0) Spacer(Modifier.height(10.dp))
-            MemoryCard(memory) { onMemory(memory) }
+            MemoryCard(memory, { onMemory(memory) }, { onDelete(memory) }, onTagClick)
         }
-        Spacer(Modifier.height(12.dp))
     }
 }
 
@@ -136,14 +182,14 @@ private fun StatTile(label: String, value: String, caption: String, icon: androi
                 Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.height(6.dp))
-            Text(value, style = MaterialTheme.typography.headlineMedium.copy(fontFamily = LogbookBody, fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+            Text(value, style = MaterialTheme.typography.headlineMedium.copy(fontFamily = LogbookNumbers, fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface)
             Text(caption, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 @Composable
-internal fun SearchScreen(memories: List<Memory>, query: String, onQuery: (String) -> Unit, category: String, onCategory: (String) -> Unit, onMemory: (Memory) -> Unit) {
+internal fun SearchScreen(memories: List<Memory>, query: String, onQuery: (String) -> Unit, category: String, onCategory: (String) -> Unit, onMemory: (Memory) -> Unit, onDelete: (Memory) -> Unit) {
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp)) {
         Text("Find a thought", fontFamily = LogbookHand, fontSize = 32.sp, color = MaterialTheme.colorScheme.onBackground)
         Spacer(Modifier.height(10.dp))
@@ -152,6 +198,9 @@ internal fun SearchScreen(memories: List<Memory>, query: String, onQuery: (Strin
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             CategoryChip("All", category == "all", MaterialTheme.colorScheme.primary) { onCategory("all") }
             LogbookCategories.forEach { (key, label) -> CategoryChip(label, category == key, MaterialTheme.colorScheme.primary) { onCategory(key) } }
+            memories.flatMap { it.tags }.distinct().filterNot { it in LogbookCategories }.sorted().forEach { tag ->
+                CategoryChip(tag.replace('-', ' '), category == tag, MaterialTheme.colorScheme.primary) { onCategory(tag) }
+            }
         }
         Spacer(Modifier.height(10.dp))
         val results = SmartNlp.search(memories, query, category)
@@ -162,9 +211,78 @@ internal fun SearchScreen(memories: List<Memory>, query: String, onQuery: (Strin
             results.isEmpty() -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 EmptyPanel("Nothing matches just yet.", "Try a shorter phrase or another category. Your saved thoughts are still here.")
             }
-            else -> LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
-                items(results, key = { it.id }) { memory -> MemoryCard(memory) { onMemory(memory) } }
+            else -> LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
+                items(results, key = { it.id }) { memory -> MemoryCard(memory, { onMemory(memory) }, { onDelete(memory) }, onCategory) }
             }
+        }
+    }
+}
+
+@Composable
+internal fun HubsScreen(memories: List<Memory>, selectedHub: EntityHub?, onSelectHub: (EntityHub?) -> Unit, onMemory: (Memory) -> Unit) {
+    val hubs = remember(memories) { SmartNlp.hubs(memories) }
+    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp)) {
+        if (selectedHub == null) {
+            Text("Your thought hubs", fontFamily = LogbookHand, fontSize = 32.sp, color = MaterialTheme.colorScheme.onBackground)
+            Text("People, projects, and topics that keep showing up.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(14.dp))
+            if (hubs.isEmpty()) {
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    EmptyPanel("Your hubs are taking shape.", "Names and recurring topics will gather here as you save thoughts.")
+                }
+            } else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
+                listOf("people", "projects", "topics").forEach { type ->
+                    val matching = hubs.filter { it.type == type }
+                    if (matching.isNotEmpty()) {
+                        item(key = "header-$type") {
+                            Text(type.replaceFirstChar { it.uppercase() }, Modifier.padding(top = 8.dp, bottom = 2.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        items(matching, key = { "${it.type}-${it.name.lowercase(Locale.ROOT)}" }) { hub -> HubCard(hub) { onSelectHub(hub) } }
+                    }
+                }
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { onSelectHub(null) }, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.ArrowBack, "Back to hubs") }
+                Column {
+                    Text(selectedHub.name, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${selectedHub.mentions} ${if (selectedHub.mentions == 1) "mention" else "mentions"} · ${selectedHub.type}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            if (selectedHub.memories.isEmpty()) {
+                EmptyPanel("No thoughts linked yet.", "Save a note mentioning ${selectedHub.name} to grow this hub.")
+            } else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
+                items(selectedHub.memories, key = { it.id }) { memory ->
+                    DewSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), onClick = { onMemory(memory) }) {
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                            Text(memory.text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(8.dp))
+                            Text(formatDate(memory.created), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HubCard(hub: EntityHub, onClick: () -> Unit) {
+    DewSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), onClick = onClick) {
+        Row(Modifier.padding(horizontal = 15.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+            val icon = when (hub.type) {
+                "projects" -> Icons.Rounded.FolderOpen
+                "topics" -> Icons.Rounded.Tag
+                else -> Icons.Rounded.PersonOutline
+            }
+            Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(23.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(hub.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${hub.memories.size} linked ${if (hub.memories.size == 1) "thought" else "thoughts"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -185,7 +303,7 @@ internal fun TasksScreen(todos: List<Todo>, draft: String, onDraft: (String) -> 
         Spacer(Modifier.height(13.dp))
         if (ordered.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             EmptyPanel("Nothing is asking for you yet.", "Add a task here, or say ‘Remind me to…’ in the local guide.")
-        } else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+        } else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
             items(ordered, key = { it.id }) { task -> TodoCard(task, { onToggle(task) }, { onDelete(task) }) }
         }
     }
@@ -193,91 +311,75 @@ internal fun TasksScreen(todos: List<Todo>, draft: String, onDraft: (String) -> 
 
 @Composable
 internal fun GuideScreen(chat: List<ChatLine>, draft: String, onDraft: (String) -> Unit, onSend: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp)) {
-        Text("A little local help", fontFamily = LogbookHand, fontSize = 32.sp, color = MaterialTheme.colorScheme.onBackground)
-        Text("No network. No pretend AI. Just useful shortcuts over your own Logbook.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(10.dp))
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text("Guide", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(6.dp))
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             chat.forEach { line ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = if (line.fromUser) Arrangement.End else Arrangement.Start) {
-                    DewSurface(Modifier.fillMaxWidth(if (line.fromUser) 0.88f else 0.96f), tone = if (line.fromUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(20.dp)) {
-                        Text(line.text, Modifier.padding(horizontal = 15.dp, vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium)
+                    DewSurface(Modifier.fillMaxWidth(if (line.fromUser) 0.82f else 0.90f), tone = if (line.fromUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(16.dp)) {
+                        Text(line.text, Modifier.padding(horizontal = 14.dp, vertical = 11.dp), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(7.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            EntryField(draft, onDraft, "Ask about notes or tasks…", false, 50.dp, Modifier.weight(1f))
-            IconButton(onClick = onSend, modifier = Modifier.size(50.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)) {
+            EntryField(draft, onDraft, "Ask or find…", false, 42.dp, Modifier.weight(1f))
+            IconButton(onClick = onSend, modifier = Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)) {
                 Icon(Icons.Rounded.ArrowUpward, "Send", tint = MaterialTheme.colorScheme.onPrimary)
             }
         }
-        Spacer(Modifier.height(6.dp))
-        Text("Try: ‘Find notes about ideas’ · ‘Show my tasks’ · ‘Remind me to call Alex tomorrow’", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Private · on this device", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, start = 3.dp))
     }
 }
 
 @Composable
 internal fun SettingsScreen(
-    name: String, onName: (String) -> Unit, dark: Boolean, onDark: (Boolean) -> Unit,
-    reducedEffects: Boolean, onReducedEffects: (Boolean) -> Unit, accentIndex: Int, onAccent: (Int) -> Unit,
+    name: String, onName: (String) -> Unit, themeMode: String, onThemeMode: (String) -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onClear: () -> Unit, onIntro: () -> Unit
 ) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, vertical = 7.dp)) {
         Text("Make it feel like yours", fontFamily = LogbookHand, fontSize = 32.sp, color = MaterialTheme.colorScheme.onBackground)
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(5.dp))
         SettingsGroup("Appearance") {
-            SettingToggle(Icons.Rounded.DarkMode, "Dark, warm ink", "Keep the same Logbook colors after dark.", dark, onDark)
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            SettingToggle(Icons.Rounded.WaterDrop, "Liquid-glass finish", "Soft sheen, a fine rim and lift on touch.", !reducedEffects, { onReducedEffects(!it) })
-            Text("Low-resource mode turns off gloss and shadows for a quieter, lighter surface.", Modifier.padding(top = 3.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(12.dp))
-            Text("Choose your accent", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(Modifier.height(5.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                AccentNames.forEachIndexed { index, label ->
-                    val swatch = accentColor(index, dark)
-                    Box(Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                        .semantics { contentDescription = "$label accent"; selected = index == accentIndex }
-                        .clickable(role = Role.RadioButton) { onAccent(index) }, contentAlignment = Alignment.Center) {
-                        Box(Modifier.size(31.dp).clip(CircleShape).background(swatch))
-                        if (index == accentIndex) Box(Modifier.size(36.dp).clip(CircleShape).border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape))
-                    }
+            Text("Follow your device or choose a steady look.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(3.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (mode, label) ->
+                    CategoryChip(label, themeMode == mode, MaterialTheme.colorScheme.primary, Modifier.weight(1f)) { onThemeMode(mode) }
                 }
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(4.dp))
         SettingsGroup("Your profile") {
-            Text("Name", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(Modifier.height(7.dp))
-            EntryField(name, onName, "A name for the greeting", false, 48.dp)
+            EntryField(name, onName, "A name for the greeting", false, 38.dp)
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(4.dp))
         SettingsGroup("Your writing stays yours") {
-            Text("Thoughts are stored in an encrypted database on this device. Logbook has no account, network AI, sync, ads or analytics. JSON files contain private writing; choose a destination you trust.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(12.dp))
+            Text("Thoughts are stored in an encrypted database on this device. logbook has no account, network AI, sync, ads or analytics. JSON files contain private writing; choose a destination you trust.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(5.dp))
             SecondaryAction("Export private JSON", Icons.Rounded.FileDownload, onExport, Modifier.fillMaxWidth())
-            Spacer(Modifier.height(7.dp))
-            SecondaryAction("Import Logbook JSON", Icons.Rounded.FileUpload, onImport, Modifier.fillMaxWidth())
-            Spacer(Modifier.height(7.dp))
+            Spacer(Modifier.height(3.dp))
+            SecondaryAction("Import logbook JSON", Icons.Rounded.FileUpload, onImport, Modifier.fillMaxWidth())
+            Spacer(Modifier.height(1.dp))
             TextButton(onClick = onClear, modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)) {
                 Icon(Icons.Rounded.DeleteOutline, null, tint = MaterialTheme.colorScheme.error); Spacer(Modifier.width(8.dp))
                 Text("Delete thoughts and tasks", color = MaterialTheme.colorScheme.error)
             }
         }
-        Spacer(Modifier.height(12.dp))
-        SettingsGroup("About Logbook") {
+        Spacer(Modifier.height(4.dp))
+        SettingsGroup("About logbook") {
             Text("A private mind space. Local-first by design; voice uses only Android’s on-device recognizer when available.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(2.dp))
             TextButton(onClick = onIntro, modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)) { Text("See the welcome again") }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(4.dp))
     }
 }
 
 @Composable
-internal fun ComposerScreen(text: String, onText: (String) -> Unit, onBack: () -> Unit, onAnalyze: () -> Unit, onMic: () -> Unit, onStop: () -> Unit, micStatus: String) {
+internal fun ComposerScreen(text: String, onText: (String) -> Unit, onBack: () -> Unit, onAnalyze: () -> Unit, onMic: () -> Unit, onStop: () -> Unit, micStatus: String, memories: List<Memory>, excludeId: String?, onRelated: (String) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.ArrowBack, "Back") }
@@ -286,6 +388,24 @@ internal fun ComposerScreen(text: String, onText: (String) -> Unit, onBack: () -
         Text("A messy first draft is welcome. You’ll review everything before it’s saved.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(13.dp))
         EntryField(text, onText, "A link, an idea, something you felt, a detail to remember…", true, 190.dp)
+        val related = remember(text, memories, excludeId) { if (text.trim().length >= 8) SmartNlp.similarMemories(text, memories, excludeId, 2) else emptyList() }
+        if (related.isNotEmpty()) {
+            Spacer(Modifier.height(11.dp))
+            Text("Recent ideas", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+            Text("This sounds close to something you kept. Tap to browse its shelf.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(6.dp))
+            related.forEach { match ->
+                val memory = match.memory
+                Spacer(Modifier.height(5.dp))
+                DewSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), onClick = { onRelated(memory.tags.firstOrNull() ?: "all") }) {
+                    Column(Modifier.padding(horizontal = 13.dp, vertical = 10.dp)) {
+                        Text(memory.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(4.dp))
+                        Text("${memory.tags.firstOrNull()?.let { LogbookCategories[it] ?: it } ?: "All thoughts"} · ${formatDate(memory.created)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
         Text("${text.length} / 2,000", Modifier.align(Alignment.End).padding(top = 5.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(7.dp))
         Text(micStatus, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -304,8 +424,9 @@ internal fun ComposerScreen(text: String, onText: (String) -> Unit, onBack: () -
 @Composable
 internal fun PreviewScreen(
     text: String, onText: (String) -> Unit, tags: List<String>, onToggleTag: (String) -> Unit,
+    customTagDraft: String, onCustomTagDraft: (String) -> Unit, onAddCustomTag: () -> Unit,
     taskSuggested: Boolean, addTask: Boolean, onAddTask: (Boolean) -> Unit,
-    onBack: () -> Unit, onSave: () -> Unit
+    onBack: () -> Unit, onSave: () -> Unit, similar: List<SimilarMemory>, onRelated: (String) -> Unit
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -315,14 +436,59 @@ internal fun PreviewScreen(
         Text("Read it once. Change anything that doesn’t feel right.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(13.dp))
         EntryField(text, onText, "Your thought", true, 130.dp)
+        if (similar.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text("A similar thought", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            Text("A small reminder of what you’ve already captured.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(6.dp))
+            similar.take(2).forEach { match ->
+                val memory = match.memory
+                Spacer(Modifier.height(5.dp))
+                DewSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), onClick = { onRelated(memory.tags.firstOrNull() ?: "all") }) {
+                    Column(Modifier.padding(horizontal = 13.dp, vertical = 10.dp)) {
+                        Text(memory.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(4.dp))
+                        Text(memory.tags.firstOrNull()?.let { LogbookCategories[it] ?: it } ?: "All thoughts", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
         Spacer(Modifier.height(15.dp))
         Text("Suggested shelves", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
         Text("Pick the labels that help you find it later.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
-        LogbookCategories.keys.toList().chunked(4).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                row.forEach { key ->
-                    CategoryChip(LogbookCategories[key].orEmpty(), key in tags, MaterialTheme.colorScheme.primary, Modifier.weight(1f)) { onToggleTag(key) }
+        val allTagOptions = (LogbookCategories.keys.toList() + tags.filterNot { it in LogbookCategories }.sorted()).distinct()
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            allTagOptions.forEach { key ->
+                CategoryChip(LogbookCategories[key] ?: key.replace('-', ' '), key in tags, MaterialTheme.colorScheme.primary) { onToggleTag(key) }
+            }
+        }
+        Spacer(Modifier.height(7.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = customTagDraft,
+                onValueChange = onCustomTagDraft,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Add your own label", style = MaterialTheme.typography.bodySmall) },
+                singleLine = true,
+                shape = CircleShape,
+                textStyle = MaterialTheme.typography.bodySmall
+            )
+            TextButton(onClick = onAddCustomTag, enabled = customTagDraft.isNotBlank(), contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Add") }
+        }
+        val evidence = remember(text) { SmartNlp.tagEvidence(text) }
+        Spacer(Modifier.height(8.dp))
+        DewSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("How suggestions work", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+                Text("A note can have several shelves. These suggestions come from local phrase matches—not a cloud AI—and you can keep, remove, or add labels.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (evidence.isEmpty()) {
+                    Text("No strong topic phrase matched, so Ideas is the gentle fallback. Links, dates, names, and action wording are also noticed when present.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Spacer(Modifier.height(2.dp))
+                    evidence.forEach { (tag, matches) ->
+                        Text("${LogbookCategories[tag] ?: tag.replace('-', ' ')} · ${matches.joinToString(" / ")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
@@ -350,9 +516,46 @@ internal fun PreviewScreen(
             }
         }
         Spacer(Modifier.height(15.dp))
-        PrimaryAction(if (addTask) "Save thought + task" else "Save to Logbook", MaterialTheme.colorScheme.primary, onSave, text.isNotBlank())
+        PrimaryAction(if (addTask) "Save thought + task" else "Save to logbook", MaterialTheme.colorScheme.primary, onSave, text.isNotBlank())
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)) { Text("Back to editing") }
+    }
+}
+
+@Composable
+internal fun BootSplash(onDismiss: () -> Unit) {
+    var phase by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        delay(120)
+        phase = 1
+        delay(760)
+        phase = 2
+        delay(520)
+        onDismiss()
+    }
+    val wordAlpha by animateFloatAsState(if (phase >= 2) 1f else 0f, tween(420), label = "splash-word-alpha")
+    val wordScale by animateFloatAsState(if (phase >= 2) 1f else 0.86f, tween(500), label = "splash-word-scale")
+    val notes = listOf("an idea", "a person", "a link", "a next step", "a feeling", "a place")
+    val starts = listOf((-112).dp to (-54).dp, (-38).dp to (-64).dp, 58.dp to (-58).dp, 112.dp to (-22).dp, (-62).dp to 54.dp, 60.dp to 52.dp)
+    val stacks = listOf((-82).dp to (-29).dp, (-30).dp to (-39).dp, 28.dp to (-39).dp, 82.dp to (-29).dp, (-28).dp to 35.dp, 30.dp to 35.dp)
+    val logoScale by animateFloatAsState(if (phase >= 1) 1f else 0.65f, tween(520), label = "splash-logo-scale")
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.fillMaxWidth().height(142.dp), contentAlignment = Alignment.Center) {
+                notes.forEachIndexed { index, note ->
+                    val x by animateDpAsState(if (phase == 0) starts[index].first else stacks[index].first, tween(680, delayMillis = index * 55), label = "splash-note-x-$index")
+                    val y by animateDpAsState(if (phase == 0) starts[index].second else stacks[index].second, tween(680, delayMillis = index * 55), label = "splash-note-y-$index")
+                    val noteAlpha by animateFloatAsState(if (phase >= 2) 0f else 1f, tween(300), label = "splash-note-alpha-$index")
+                    Text(note, Modifier.offset(x, y).alpha(noteAlpha).clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
+                }
+                Image(painterResource(R.drawable.logbook_logo), "logbook logo", Modifier.size(76.dp).scale(logoScale))
+            }
+            Text("logbook", Modifier.alpha(wordAlpha).scale(wordScale), style = MaterialTheme.typography.headlineMedium.copy(fontFamily = LogbookBody, fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
+            Text("your private mind space", Modifier.alpha(wordAlpha), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp)) { Text("Skip") }
     }
 }
 
