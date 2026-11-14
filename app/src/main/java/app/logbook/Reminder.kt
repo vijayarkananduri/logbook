@@ -61,7 +61,9 @@ private fun ensureChannel(context: Context) {
 }
 
 private fun nudgeText(context: Context, kind: String): String {
-    val open = LocalStore(context.applicationContext).use { it.todos().count { todo -> !todo.completed } }
+    val store = LocalStore(context.applicationContext)
+    val open: Int
+    try { open = store.todos().count { todo: Todo -> !todo.completed } } finally { store.close() }
     val prefs = context.getSharedPreferences("settings", 0)
     val pool = if (kind == "morning") {
         if (open > 0) listOf("Good morning. You have $open things in motion today.", "Morning. $open small things are waiting for you—take them one at a time.", "Good morning. Your day has $open things on the board and room to breathe.")
