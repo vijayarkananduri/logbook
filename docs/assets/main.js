@@ -1,7 +1,7 @@
 (()=>{const d=document,q=s=>[...d.querySelectorAll(s)],rm=matchMedia('(prefers-reduced-motion:reduce)').matches;
 const tg=d.querySelector('.tg');if(tg){const ic=()=>tg.textContent=d.documentElement.dataset.theme=='dark'?'☀':'☾';ic();tg.onclick=()=>{const t=d.documentElement.dataset.theme=='dark'?'light':'dark';d.documentElement.dataset.theme=t;try{localStorage.setItem('lb',t)}catch(e){}ic()}}
 const px=q('[data-speed]'),pin=d.querySelector('.pin'),bar=d.querySelector('.bar');
-function frame(){const vh=innerHeight,H=d.documentElement.scrollHeight-vh;bar.style.setProperty('--p',H>0?scrollY/H:0);
+function frame(){const vh=innerHeight,H=d.documentElement.scrollHeight-vh;bar.style.setProperty('--p',H>0?scrollY/H:0);d.body.classList.toggle('dk',scrollY>vh*.7&&scrollY<H-vh*.9);
 if(!rm)px.forEach(e=>{const b=(e.closest('[data-pz]')||e.parentElement).getBoundingClientRect();if(b.bottom<-300||b.top>vh+300)return;e.style.setProperty('--sy',(-(b.top+b.height/2-vh/2)*e.dataset.speed).toFixed(1))});
 if(pin){const r=pin.getBoundingClientRect(),p=Math.min(1,Math.max(0,-r.top/(r.height-vh))),n=pin.querySelectorAll('.step').length,i=Math.min(n-1,Math.floor(p*n));
 pin.style.setProperty('--pp',p.toFixed(3));pin.querySelectorAll('.step,.phone img,.dots i').forEach((e,k)=>e.classList.toggle('on',k%n==i))}}
