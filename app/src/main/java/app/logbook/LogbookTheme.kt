@@ -3,13 +3,16 @@ package app.logbook
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,6 +27,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -50,14 +54,19 @@ internal enum class LogbookScreen { Welcome, Intro, Home, Search, Hubs, Tasks, G
 internal data class ChatLine(val fromUser: Boolean, val text: String)
 
 internal val LogbookBody = FontFamily(
-    Font(R.font.urbanist, FontWeight.Normal), Font(R.font.urbanist, FontWeight.Medium),
-    Font(R.font.urbanist, FontWeight.SemiBold), Font(R.font.urbanist, FontWeight.Bold)
+    Font(R.font.manrope, FontWeight.Normal), Font(R.font.manrope, FontWeight.Medium),
+    Font(R.font.manrope, FontWeight.SemiBold), Font(R.font.manrope, FontWeight.Bold)
 )
-internal val LogbookHand = FontFamily(Font(R.font.bebas_neue, FontWeight.Normal))
+internal val LogbookHand = FontFamily(Font(R.font.sora, FontWeight.SemiBold))
+internal val LogbookNumbers = FontFamily(Font(R.font.sora, FontWeight.Medium))
 internal val LogbookCategories = linkedMapOf(
-    "ideas" to "Ideas", "projects" to "Projects", "emotions" to "Feelings",
+    "ideas" to "Ideas", "projects" to "Projects", "work" to "Work",
+    "learning" to "Learning", "health" to "Health", "emotions" to "Feelings",
+    "relationships" to "People & bonds", "family" to "Family", "travel" to "Travel",
+    "places" to "Places", "money" to "Money", "food" to "Food",
+    "events" to "Events", "goals" to "Goals", "habits" to "Habits",
     "links" to "Links", "code" to "Code", "life" to "Life",
-    "persons" to "People", "refs" to "Files"
+    "tasks" to "Tasks", "persons" to "People", "refs" to "References", "media" to "Media"
 )
 
 
@@ -67,20 +76,20 @@ private val Night = Color(0xFF1C1916)
 private val NightInk = Color(0xFFF3EADF)
 private val BaseTypography = Typography()
 private val LogbookTypography = BaseTypography.copy(
-    displayLarge = BaseTypography.displayLarge.copy(fontFamily = LogbookHand),
-    displayMedium = BaseTypography.displayMedium.copy(fontFamily = LogbookHand),
-    displaySmall = BaseTypography.displaySmall.copy(fontFamily = LogbookHand),
-    headlineLarge = BaseTypography.headlineLarge.copy(fontFamily = LogbookHand),
-    headlineMedium = BaseTypography.headlineMedium.copy(fontFamily = LogbookHand),
-    headlineSmall = BaseTypography.headlineSmall.copy(fontFamily = LogbookHand),
-    titleLarge = BaseTypography.titleLarge.copy(fontFamily = LogbookBody),
-    titleMedium = BaseTypography.titleMedium.copy(fontFamily = LogbookBody),
-    titleSmall = BaseTypography.titleSmall.copy(fontFamily = LogbookBody),
+    displayLarge = BaseTypography.displayLarge.copy(fontFamily = LogbookHand, fontWeight = FontWeight.SemiBold),
+    displayMedium = BaseTypography.displayMedium.copy(fontFamily = LogbookHand, fontWeight = FontWeight.SemiBold),
+    displaySmall = BaseTypography.displaySmall.copy(fontFamily = LogbookHand, fontWeight = FontWeight.SemiBold),
+    headlineLarge = BaseTypography.headlineLarge.copy(fontFamily = LogbookHand, fontWeight = FontWeight.SemiBold),
+    headlineMedium = BaseTypography.headlineMedium.copy(fontFamily = LogbookHand, fontWeight = FontWeight.SemiBold),
+    headlineSmall = BaseTypography.headlineSmall.copy(fontFamily = LogbookHand, fontWeight = FontWeight.SemiBold),
+    titleLarge = BaseTypography.titleLarge.copy(fontFamily = LogbookHand, fontWeight = FontWeight.SemiBold),
+    titleMedium = BaseTypography.titleMedium.copy(fontFamily = LogbookHand, fontWeight = FontWeight.SemiBold),
+    titleSmall = BaseTypography.titleSmall.copy(fontFamily = LogbookHand, fontWeight = FontWeight.SemiBold),
     bodyLarge = BaseTypography.bodyLarge.copy(fontFamily = LogbookBody, fontSize = 16.sp, lineHeight = 24.sp),
     bodyMedium = BaseTypography.bodyMedium.copy(fontFamily = LogbookBody, fontSize = 14.sp, lineHeight = 21.sp),
     bodySmall = BaseTypography.bodySmall.copy(fontFamily = LogbookBody, fontSize = 12.sp, lineHeight = 18.sp),
     labelLarge = BaseTypography.labelLarge.copy(fontFamily = LogbookBody, fontWeight = FontWeight.SemiBold),
-    labelMedium = BaseTypography.labelMedium.copy(fontFamily = LogbookBody)
+    labelMedium = BaseTypography.labelMedium.copy(fontFamily = LogbookBody, fontWeight = FontWeight.SemiBold)
 )
 private val LocalReducedEffects = compositionLocalOf { true }
 
@@ -128,19 +137,21 @@ internal fun DewSurface(
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
-        modifier.shadow(if (MaterialTheme.colorScheme.background.luminance() < 0.5f) 2.dp else 3.dp, shape)
+        modifier.shadow(if (MaterialTheme.colorScheme.background.luminance() < 0.5f) 5.dp else 8.dp, shape)
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(tone.copy(alpha = 0.97f), tone, tone.copy(alpha = 0.99f))))
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+            .background(Brush.verticalGradient(listOf(tone.copy(alpha = 0.76f), tone.copy(alpha = 0.66f))))
+            .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), shape)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
     ) { content() }
 }
 
 @Composable
-internal fun BrandBar(name: String, onGuide: () -> Unit) {
+internal fun BrandBar(onGuide: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 5.dp, bottom = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Image(painterResource(R.drawable.logbook_logo), "logbook logo", Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)))
+        Spacer(Modifier.width(9.dp))
         Column(Modifier.weight(1f)) {
-            Text("logbook", style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), letterSpacing = 0.2.sp, color = MaterialTheme.colorScheme.primary)
+            Text("logbook", style = MaterialTheme.typography.titleMedium.copy(fontFamily = LogbookBody, fontWeight = FontWeight.Bold, fontSize = 22.sp), color = MaterialTheme.colorScheme.onBackground)
             Text("your private mind space", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         IconButton(onClick = onGuide, modifier = Modifier.size(48.dp).semantics { contentDescription = "Open private Guide" }) { Icon(Icons.Rounded.ChatBubbleOutline, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -150,8 +161,8 @@ internal fun BrandBar(name: String, onGuide: () -> Unit) {
 @Composable
 internal fun EntryField(value: String, onValue: (String) -> Unit, hint: String, multiline: Boolean, minHeight: Dp, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(18.dp)
-    val fill = MaterialTheme.colorScheme.surface.copy(alpha = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) 0.94f else 0.90f)
-    Column(modifier.fillMaxWidth().clip(shape).background(fill).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.78f), shape).padding(horizontal = 15.dp, vertical = 12.dp)) {
+    val fill = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+    Column(modifier.fillMaxWidth().clip(shape).background(fill).border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), shape).padding(horizontal = 13.dp, vertical = 10.dp)) {
         Box(Modifier.fillMaxWidth().heightIn(min = minHeight)) {
             if (value.isEmpty()) Text(hint, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.76f), style = MaterialTheme.typography.bodyMedium)
             BasicTextField(
@@ -168,17 +179,17 @@ internal fun EntryField(value: String, onValue: (String) -> Unit, hint: String, 
 
 @Composable
 internal fun PrimaryAction(label: String, accent: Color, onClick: () -> Unit, enabled: Boolean = true) {
-    Button(onClick, Modifier.fillMaxWidth().defaultMinSize(minHeight = 52.dp), enabled = enabled, shape = RoundedCornerShape(17.dp),
+    Button(onClick, Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp), enabled = enabled, shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = if (accent.luminance() > 0.34f) Ink else Color.White),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 5.dp, focusedElevation = 3.dp, hoveredElevation = 3.dp)) {
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 1.dp, focusedElevation = 0.dp, hoveredElevation = 0.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }
 
 @Composable
 internal fun SecondaryAction(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    OutlinedButton(onClick, modifier.defaultMinSize(minHeight = 48.dp), shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 1.dp, pressedElevation = 3.dp)) {
+    FilledTonalButton(onClick, modifier.defaultMinSize(minHeight = 42.dp), shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))) {
         Icon(icon, null, Modifier.size(19.dp)); Spacer(Modifier.width(7.dp))
         Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
@@ -186,11 +197,11 @@ internal fun SecondaryAction(label: String, icon: ImageVector, onClick: () -> Un
 
 @Composable
 internal fun CategoryChip(label: String, selected: Boolean, accent: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(modifier.defaultMinSize(minHeight = 48.dp).shadow(if (selected) 2.dp else 0.dp, CircleShape).clip(CircleShape)
-        .background(if (selected) accent else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f))
-        .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 13.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+    Box(modifier.defaultMinSize(minHeight = 34.dp).clip(CircleShape)
+        .background(if (selected) accent.copy(alpha = 0.90f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.50f))
+        .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 10.dp, vertical = 5.dp), contentAlignment = Alignment.Center) {
         Text(label, color = if (selected) (if (accent.luminance() > 0.34f) Ink else Color.White) else MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelMedium, maxLines = 1)
+            style = MaterialTheme.typography.labelSmall.copy(fontFamily = LogbookBody, fontWeight = FontWeight.SemiBold), maxLines = 1)
     }
 }
 
@@ -226,12 +237,12 @@ internal fun MemoryCard(memory: Memory, onClick: () -> Unit, onDelete: () -> Uni
                 Text(memory.text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(9.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                        memory.tags.take(3).forEach { tag ->
+                    Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        memory.tags.distinct().forEach { tag ->
                             Text(LogbookCategories[tag] ?: tag, style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
-                                    .then(if (onTagClick != null) Modifier.clickable { onTagClick(tag) } else Modifier).padding(horizontal = 8.dp, vertical = 4.dp))
+                                    .then(if (onTagClick != null) Modifier.clickable { onTagClick(tag) } else Modifier).padding(horizontal = 6.dp, vertical = 3.dp))
                         }
                     }
                     Text(formatDate(memory.created), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -265,11 +276,9 @@ internal fun TodoCard(task: Todo, onToggle: () -> Unit, onDelete: () -> Unit) {
 
 @Composable
 internal fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
-    DewSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(Modifier.height(10.dp)); content()
-        }
+    Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+        Spacer(Modifier.height(6.dp)); content()
     }
 }
 
@@ -297,19 +306,19 @@ internal fun BottomNavigation(screen: LogbookScreen, onSelect: (LogbookScreen) -
         LogbookScreen.Tasks, LogbookScreen.Guide, LogbookScreen.Compose, LogbookScreen.Preview, LogbookScreen.Intro -> LogbookScreen.Home
         else -> screen
     }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 5.dp).clip(RoundedCornerShape(18.dp))
-        .background(MaterialTheme.colorScheme.surface)
-        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(18.dp)).padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 30.dp, vertical = 9.dp)
+        .shadow(14.dp, CircleShape).clip(CircleShape)
+        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.78f))
+        .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f), CircleShape).padding(horizontal = 5.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         destinations.forEach { (destination, label, icon) ->
             val selected = selectedScreen == destination
-            Column(Modifier.weight(1f).heightIn(min = 54.dp).clip(RoundedCornerShape(14.dp))
-                .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+            Column(Modifier.weight(1f).heightIn(min = 50.dp)
                 .clickable(role = Role.Tab) { onSelect(destination) }
                 .semantics { contentDescription = if (selected) "$label selected" else label }
-                .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(icon, null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
-                if (selected) Text(label, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                .padding(vertical = 5.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Icon(icon, null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(21.dp))
+                if (selected) Text(label, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall.copy(fontFamily = LogbookBody, fontWeight = FontWeight.SemiBold), maxLines = 1)
             }
         }
     }

@@ -9,7 +9,7 @@ internal data class SimilarMemory(val memory: Memory, val score: Float)
 
 /** Predictable, deterministic helpers. This object never performs network or remote-model calls. */
 object SmartNlp {
-    val categories = listOf("ideas", "projects", "emotions", "links", "code", "life", "persons", "refs")
+    val categories = listOf("ideas", "projects", "work", "learning", "health", "emotions", "relationships", "family", "travel", "places", "money", "food", "events", "goals", "habits", "links", "code", "life", "tasks", "persons", "refs", "media")
     private val stopWords = setOf(
         "about", "after", "again", "also", "and", "are", "because", "been", "before", "being", "but", "could", "did", "does", "doing", "down", "each", "for", "from", "have", "here", "into", "just", "like", "more", "most", "need", "note", "notes", "only", "other", "our", "out", "over", "same", "some", "than", "that", "the", "their", "them", "then", "there", "these", "they", "this", "those", "through", "today", "tomorrow", "under", "very", "was", "were", "what", "when", "where", "which", "while", "with", "would", "your", "idea", "ideas", "project", "projects", "thought", "thoughts", "logbook"
     )
@@ -19,13 +19,26 @@ object SmartNlp {
         "links" to listOf("http://", "https://", "www.", "link to", "bookmark"),
         "ideas" to listOf("idea", "imagine", "what if", "maybe", "concept", "i think", "could be", "would be nice"),
         "projects" to listOf("project", "launch", "design", "roadmap", "ship", "prototype", "milestone", "working on"),
+        "work" to listOf("work", "client", "colleague", "deadline", "meeting", "office", "business", "team", "manager"),
+        "learning" to listOf("learn", "study", "course", "class", "lesson", "practice", "research", "understand"),
+        "health" to listOf("health", "doctor", "medicine", "workout", "exercise", "sleep", "therapy", "symptom"),
         "emotions" to listOf("feel", "feeling", "happy", "sad", "anxious", "excited", "worried", "love", "overwhelmed", "grateful"),
+        "relationships" to listOf("friend", "partner", "relationship", "date", "talk with", "conversation with", "said to me"),
+        "family" to listOf("family", "mom", "mum", "dad", "sister", "brother", "daughter", "son", "grandma", "grandpa"),
+        "travel" to listOf("travel", "trip", "flight", "hotel", "vacation", "holiday", "itinerary", "passport"),
+        "places" to listOf("place", "address", "restaurant", "cafe", "city", "neighborhood", "venue", "map"),
+        "money" to listOf("money", "budget", "price", "cost", "expense", "save for", "invoice", "bill", "payment"),
+        "food" to listOf("food", "recipe", "cook", "lunch", "dinner", "breakfast", "coffee", "meal"),
+        "events" to listOf("event", "birthday", "wedding", "concert", "conference", "party", "celebration"),
+        "goals" to listOf("goal", "aim", "target", "long-term", "one day", "aspire", "milestone"),
+        "habits" to listOf("habit", "routine", "every day", "daily", "weekly", "consistency", "streak"),
         "life" to listOf("remember", "need to", "call", "appointment", "buy", "today", "tomorrow", "family", "home"),
         "persons" to listOf("met ", "said ", "email from", "friend", "mom", "dad", "sarah", "alex", "sam"),
-        "refs" to listOf("quote", "book", "article", "reference", "source", "read later", "paper")
+        "refs" to listOf("quote", "book", "article", "reference", "source", "read later", "paper", "citation"),
+        "media" to listOf("movie", "film", "show", "podcast", "song", "album", "video", "playlist")
     )
-    private val taskStarts = Regex("(?i)^\\s*(remind me to|remember to|don['’]t forget to|todo:|task:|add (?:a )?task(?: to)?|create (?:a )?todo(?: to)?)\\s*")
-    private val taskHints = listOf("need to", "have to", "must ", "don’t forget", "don't forget", "remind me", "remember to", "todo:", "task:", "call ", "buy ", "schedule ", "email ", "finish ")
+    private val taskStarts = Regex("(?i)^\\s*(?:(?:could|can) you\\s+|please\\s+)?(remind me (?:to|about)|remember to|don['’]t forget to|make sure i|i need to|i have to|i should|todo:|task:|add (?:a )?task(?: to)?|create (?:a )?todo(?: to)?|put .+ on my (?:task|todo|to-do) list(?: to)?)\\s*")
+    private val taskHints = listOf("need to", "have to", "must ", "don’t forget", "don't forget", "remind me", "remember to", "todo:", "task:", "call ", "buy ", "schedule ", "email ", "finish ", "make sure i", "add this to my list")
     private val dateWords = Regex("(?i)\\b(today|tomorrow|tonight|next week|in \\d{1,2} days?|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b")
 
     fun analyze(text: String): Pair<List<String>, List<String>> {
@@ -44,8 +57,26 @@ object SmartNlp {
         val people = entities(text)
         val tags = scores.filter { it.value > 0 }.keys.toMutableList()
         if (people.isNotEmpty() && "persons" !in tags) tags += "persons"
+        if (taskCandidate(text) && "tasks" !in tags) tags += "tasks"
         if (tags.isEmpty()) tags += "ideas"
         return tags.distinct() to attributes(text)
+    }
+
+    /** Makes automatic multi-tag suggestions understandable without hiding their local rules. */
+    fun tagEvidence(text: String): List<Pair<String, List<String>>> {
+        val normalized = text.lowercase(Locale.ROOT)
+        val evidence = signals.mapNotNull { (tag, phrases) ->
+            val matched = phrases.map(String::trim).filter { phrase ->
+                if (phrase.contains("://") || phrase == "www.") normalized.contains(phrase)
+                else Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(phrase) + "(?![\\p{L}\\p{N}])").containsMatchIn(normalized)
+            }.distinct().take(3)
+            if (matched.isEmpty()) null else tag to matched
+        }.toMutableList()
+        if (Regex("https?://\\S+", RegexOption.IGNORE_CASE).containsMatchIn(text)) evidence.add("links" to listOf("web address"))
+        val names = entities(text)
+        if (names.isNotEmpty()) evidence.add("persons" to names.take(3))
+        if (taskCandidate(text)) evidence.add("tasks" to listOf("action wording"))
+        return evidence.distinctBy { it.first }
     }
 
     fun attributes(text: String): List<String> {
@@ -132,10 +163,13 @@ object SmartNlp {
         return taskStarts.containsMatchIn(text) || taskHints.any { normalized.contains(it) }
     }
 
-    fun isTaskCommand(text: String): Boolean = taskStarts.containsMatchIn(text)
+    fun isTaskCommand(text: String): Boolean = taskStarts.containsMatchIn(text) ||
+        Regex("(?i)\\b(?:can|could) you (?:add|put) .+ (?:to|on) my (?:tasks|todos|to-do list)\\b").containsMatchIn(text) ||
+        Regex("(?i)\\b(?:make|create) (?:me )?(?:a )?(?:task|reminder|todo)\\b").containsMatchIn(text)
 
     fun taskText(text: String): String {
         val body = text.trim().replaceFirst(taskStarts, "").trim()
+            .replaceFirst(Regex("(?i)^(?:to|that i|for me to)\\s+"), "")
         return body.removePrefix("to ").removePrefix("To ").trim().ifBlank { text.trim() }
     }
 

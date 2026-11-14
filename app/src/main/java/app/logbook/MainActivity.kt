@@ -69,6 +69,7 @@ private fun LogbookApp(store: LocalStore) {
     var category by remember { mutableStateOf("all") }
     var selectedHub by remember { mutableStateOf<EntityHub?>(null) }
     var showSplash by remember { mutableStateOf(true) }
+    var customTagDraft by remember { mutableStateOf("") }
     var composerText by remember { mutableStateOf("") }
     var previewTags by remember { mutableStateOf(listOf("ideas")) }
     var addTaskWithMemory by remember { mutableStateOf(false) }
@@ -216,6 +217,7 @@ private fun LogbookApp(store: LocalStore) {
         editingMemory = existing
         composerText = existing?.text.orEmpty()
         previewTags = existing?.tags?.ifEmpty { listOf("ideas") } ?: listOf("ideas")
+        customTagDraft = ""
         addTaskWithMemory = false
         micStatus = "Voice is optional; typing always works."
         screen = LogbookScreen.Compose
@@ -242,6 +244,7 @@ private fun LogbookApp(store: LocalStore) {
                 if (task != null) askForNotificationsIfNeeded(task.due != null)
                 editingMemory = null
                 composerText = ""
+                customTagDraft = ""
                 screen = LogbookScreen.Home
                 toast(if (task == null) "Thought tucked safely away" else "Thought saved and task added")
             }.onFailure { toast("Could not save this thought") }
@@ -253,30 +256,43 @@ private fun LogbookApp(store: LocalStore) {
         val lower = q.lowercase(Locale.ROOT)
         if (SmartNlp.isTaskCommand(q)) {
             val taskText = SmartNlp.taskText(q)
-            if (taskText.isBlank()) return "Tell me what you want to remember, for example: ‘Remind me to call Sam tomorrow.’"
+            if (taskText.isBlank()) return "Sure—what should I put on your list? For example, ‘Remind me to call Sam tomorrow.’"
             saveTask(taskText)
             val due = SmartNlp.due(taskText)?.let { " for ${formatDue(it)}" }.orEmpty()
-            return "Added ‘$taskText’ to your tasks$due."
+            return "Got it. I added ‘$taskText’ to Things in motion$due."
         }
-        if (listOf("my tasks", "show tasks", "show my tasks", "to-do", "todo list").any { lower.contains(it) }) {
+        val asksForTasks = listOf("task", "to-do", "todo", "reminder", "next step").any { lower.contains(it) } &&
+            listOf("show", "list", "what", "have", "due", "left", "pending", "remaining", "my").any { lower.contains(it) }
+        if (asksForTasks) {
             val open = todos.filterNot { it.completed }
-            return if (open.isEmpty()) "You’re all clear. No open tasks right now."
-            else open.take(8).joinToString("\n") { "• ${it.text}${it.due?.let { due -> " — ${formatDue(due)}" }.orEmpty()}" }
+            return if (open.isEmpty()) "You’re all clear—there aren’t any open tasks right now."
+            else "Here’s what’s still in motion:\n" + open.take(8).joinToString("\n") { "• ${it.text}${it.due?.let { due -> " · ${formatDue(due)}" }.orEmpty()}" }
         }
-        if (listOf("find", "search", "look for", "when did i", "what did i write", "show me").any { lower.contains(it) }) {
-            val term = q.replace(Regex("(?i)^(find|search(?: for)?|look for|show me|when did i|what did i write about)\\s*"), "")
-                .replace(Regex("(?i)^(a |the )?(note|memory|thought)s?\\s*(about )?"), "").trim()
+        if (listOf("tag", "label", "categor", "organize").any { lower.contains(it) }) {
+            val tagNames = LogbookCategories.values.joinToString(", ")
+            return "I suggest labels from words and phrases in your note—like links, dates, names, action wording, and topic terms. You can keep several, remove any, or add your own. Current shelves include $tagNames. All matching happens on this device."
+        }
+        val asksToSearch = Regex("(?i)\\b(find|search|look for|look up|show me|what did i (?:write|save|note) about|what have i written about|do you remember what i wrote about)\\b").containsMatchIn(q)
+        if (asksToSearch) {
+            val term = q.replace(Regex("(?i)^.*?\\b(?:find|search(?: for)?|look for|look up|show me|what did i (?:write|save|note) about|what have i written about|do you remember what i wrote about)\\s*"), "")
+                .replace(Regex("(?i)^(?:my )?(?:notes?|memories|thoughts?)\\s*(?:about|on|for)?\\s*"), "")
+                .trim().trimEnd('?', '.', '!')
+            if (term.isBlank()) return "What should I look for? A name, phrase, link, or topic is enough."
             val matches = SmartNlp.search(memories, term, "all")
-            return if (matches.isEmpty()) "I couldn’t find a matching thought. Try a different word or open Search to browse by category."
-            else matches.take(3).joinToString("\n\n") { "“${it.text.take(180)}${if (it.text.length > 180) "…" else ""}”" }
+            return if (matches.isEmpty()) "I didn’t find a note matching ‘$term’. Try a shorter phrase, or tap a tag in Search to browse that shelf."
+            else "I found ${matches.size} ${if (matches.size == 1) "thought" else "thoughts"} that may fit ‘$term’:\n" + matches.take(3).joinToString("\n\n") { "“${it.text.take(180)}${if (it.text.length > 180) "…" else ""}” · ${it.tags.joinToString(" · ") { tag -> LogbookCategories[tag] ?: tag }}" }
         }
         if (lower.contains("today") || lower.contains("captured") || lower.contains("summary")) {
             val todayCount = memories.count { isToday(it.created) }
             val openTasks = todos.count { !it.completed }
-            return "Today you’ve caught $todayCount ${if (todayCount == 1) "thought" else "thoughts"}. You have $openTasks open ${if (openTasks == 1) "task" else "tasks"}. Everything stays on this device."
+            return "A quick check-in: you’ve saved $todayCount ${if (todayCount == 1) "thought" else "thoughts"} today, and $openTasks ${if (openTasks == 1) "task is" else "tasks are"} still open."
         }
-        if (lower in listOf("hi", "hello", "help", "what can you do?")) return "I can search saved thoughts, show open tasks, or add a task when you say ‘Remind me to…’. I don’t use a cloud AI."
-        return "I’m a small local helper, not a cloud AI. Try ‘Find my notes about ideas’, ‘Show my tasks’, or ‘Remind me to call Alex tomorrow.’"
+        if (Regex("(?i)\\b(hi|hello|hey|good morning|good evening)\\b").containsMatchIn(lower)) {
+            return "Hey${name.takeIf { it.isNotBlank() }?.let { ", $it"}.orEmpty()}—what’s on your mind? You can ask me to find a thought, check what’s still open, or help you remember something."
+        }
+        if (Regex("(?i)\\b(thanks|thank you|cheers)\\b").containsMatchIn(lower)) return "Anytime. I’m here whenever you want to catch or find a thought."
+        if (listOf("help", "what can you do", "how do i use").any { lower.contains(it) }) return "Talk naturally. Ask ‘what did I save about the trip?’, ‘what’s still on my list?’, or ‘remind me to email Maya Friday’. I can also explain how tags were suggested. Your notes never leave this device."
+        return "I’m following along. I use local matching rather than a cloud chatbot, but you can phrase things naturally—ask about a note, a person, a topic, or what you need to do next."
     }
 
     BackHandler(enabled = screen != LogbookScreen.Home && screen != LogbookScreen.Welcome) {
@@ -336,9 +352,23 @@ private fun LogbookApp(store: LocalStore) {
                     )
                     LogbookScreen.Preview -> PreviewScreen(
                         text = composerText,
-                        onText = { composerText = it.take(2000) },
+                        onText = { value ->
+                            val clipped = value.take(2000)
+                            val oldSuggestions = SmartNlp.analyze(composerText).first
+                            val newSuggestions = SmartNlp.analyze(clipped).first
+                            previewTags = (previewTags.filterNot { it in oldSuggestions } + newSuggestions).distinct()
+                            composerText = clipped
+                        },
                         tags = previewTags,
                         onToggleTag = { tag -> previewTags = if (tag in previewTags) { if (previewTags.size > 1) previewTags - tag else previewTags } else previewTags + tag },
+                        customTagDraft = customTagDraft,
+                        onCustomTagDraft = { customTagDraft = it.take(40) },
+                        onAddCustomTag = {
+                            val tag = customTagDraft.trim().lowercase(Locale.ROOT)
+                                .replace(Regex("[^\\p{L}\\p{N}]+"), "-").trim('-').take(32)
+                            if (tag.isNotBlank() && tag !in previewTags) previewTags = previewTags + tag
+                            customTagDraft = ""
+                        },
                         taskSuggested = SmartNlp.taskCandidate(composerText),
                         addTask = addTaskWithMemory,
                         onAddTask = { addTaskWithMemory = it },
@@ -349,7 +379,7 @@ private fun LogbookApp(store: LocalStore) {
                     )
                     else -> Box(Modifier.fillMaxSize()) {
                         Column(Modifier.fillMaxSize()) {
-                            BrandBar(name) { screen = LogbookScreen.Guide }
+                            BrandBar { screen = LogbookScreen.Guide }
                             AnimatedContent(targetState = screen, modifier = Modifier.weight(1f), transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "logbook-screen") { route ->
                                 when (route) {
                                     LogbookScreen.Home -> HomeScreen(name, memories, todos, { selectedMemory = it }, { memoryToDelete = it },

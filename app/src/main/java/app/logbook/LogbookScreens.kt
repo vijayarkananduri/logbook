@@ -1,6 +1,10 @@
 package app.logbook
 
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,12 +26,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.painterResource
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,8 +45,14 @@ import kotlinx.coroutines.delay
 @Composable
 internal fun WelcomeScreen(name: String, onName: (String) -> Unit, onContinue: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center) {
-        Text("logbook", style = MaterialTheme.typography.headlineSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif, fontWeight = FontWeight.Bold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), color = MaterialTheme.colorScheme.primary)
-        Text("your private mind space", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.logbook_logo), "logbook logo", Modifier.size(52.dp))
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("logbook", style = MaterialTheme.typography.titleLarge.copy(fontFamily = LogbookBody, fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
+                Text("your private mind space", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         Spacer(Modifier.height(22.dp))
         Text("A little room\nfor your thoughts.", fontFamily = LogbookHand, fontSize = 42.sp, lineHeight = 46.sp, color = MaterialTheme.colorScheme.onBackground)
         Spacer(Modifier.height(14.dp))
@@ -58,17 +68,40 @@ internal fun WelcomeScreen(name: String, onName: (String) -> Unit, onContinue: (
 
 @Composable
 internal fun IntroScreen(onStart: () -> Unit) {
+    val features = listOf(
+        Triple(Icons.Rounded.EditNote, "Catch the whole thought", "Save fragments, plans, links, feelings, and reminders. Write freely first; decide what matters after."),
+        Triple(Icons.Rounded.AutoAwesome, "Get several useful tags", "Local phrase rules can suggest more than one shelf at once. Review each suggestion, keep what fits, and add your own labels."),
+        Triple(Icons.Rounded.Search, "Find ideas by words or tags", "Search checks note text, labels, people, links, and dates. Tap a tag to browse the notes on that shelf."),
+        Triple(Icons.Rounded.Hub, "Notice what connects", "People, projects, and recurring topics gather into hubs as your notes grow."),
+        Triple(Icons.Rounded.CheckCircle, "Turn a thought into a next step", "Task wording and dates can suggest a reminder. Nothing is scheduled until you choose to save it."),
+        Triple(Icons.Rounded.Lock, "Keep it on this device", "Your notes stay in the encrypted local database. Tagging and chat use predictable on-device rules, not a cloud AI.")
+    )
+    var revealed by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        features.indices.forEach { index ->
+            delay(90)
+            revealed = index + 1
+        }
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
-        Text("A place to put it down.", fontFamily = LogbookHand, fontSize = 36.sp, color = MaterialTheme.colorScheme.onBackground)
-        Spacer(Modifier.height(8.dp))
-        Text("logbook helps you remember what matters without asking you to organize everything first.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(22.dp))
-        IntroCard(Icons.Rounded.EditNote, "Catch it", "Write or try on-device voice. Read the transcript before you save it.")
-        Spacer(Modifier.height(12.dp))
-        IntroCard(Icons.Rounded.AutoAwesome, "Let it sort itself", "A small, predictable on-device helper suggests categories, links, dates and names. You stay in charge.")
-        Spacer(Modifier.height(12.dp))
-        IntroCard(Icons.Rounded.Lock, "Keep it yours", "Thoughts are encrypted on this device. There is no account, sync, analytics or remote AI.")
-        Spacer(Modifier.height(28.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.logbook_logo), "logbook logo", Modifier.size(48.dp))
+            Spacer(Modifier.width(11.dp))
+            Column {
+                Text("A little room for it all.", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
+                Text("A quick tour · about 30 seconds", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.height(9.dp))
+        Text("Catch it now. Let logbook help you connect and find it later.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(14.dp))
+        features.forEachIndexed { index, feature ->
+            AnimatedVisibility(visible = index < revealed, enter = fadeIn(tween(260)) + slideInVertically(tween(260)) { it / 5 }) {
+                IntroCard(feature.first, feature.second, feature.third)
+            }
+            if (index < features.lastIndex) Spacer(Modifier.height(8.dp))
+        }
+        Spacer(Modifier.height(16.dp))
         PrimaryAction("Open logbook", MaterialTheme.colorScheme.primary, onStart)
     }
 }
@@ -149,7 +182,7 @@ private fun StatTile(label: String, value: String, caption: String, icon: androi
                 Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.height(6.dp))
-            Text(value, style = MaterialTheme.typography.headlineMedium.copy(fontFamily = LogbookBody, fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+            Text(value, style = MaterialTheme.typography.headlineMedium.copy(fontFamily = LogbookNumbers, fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface)
             Text(caption, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
@@ -165,6 +198,9 @@ internal fun SearchScreen(memories: List<Memory>, query: String, onQuery: (Strin
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             CategoryChip("All", category == "all", MaterialTheme.colorScheme.primary) { onCategory("all") }
             LogbookCategories.forEach { (key, label) -> CategoryChip(label, category == key, MaterialTheme.colorScheme.primary) { onCategory(key) } }
+            memories.flatMap { it.tags }.distinct().filterNot { it in LogbookCategories }.sorted().forEach { tag ->
+                CategoryChip(tag.replace('-', ' '), category == tag, MaterialTheme.colorScheme.primary) { onCategory(tag) }
+            }
         }
         Spacer(Modifier.height(10.dp))
         val results = SmartNlp.search(memories, query, category)
@@ -303,45 +339,42 @@ internal fun SettingsScreen(
     name: String, onName: (String) -> Unit, themeMode: String, onThemeMode: (String) -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, onClear: () -> Unit, onIntro: () -> Unit
 ) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 17.dp, vertical = 7.dp)) {
         Text("Make it feel like yours", fontFamily = LogbookHand, fontSize = 32.sp, color = MaterialTheme.colorScheme.onBackground)
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(5.dp))
         SettingsGroup("Appearance") {
-            Text("Theme", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
-            Text("Follow your device, or choose a steady light or dark look.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(6.dp))
+            Text("Follow your device or choose a steady look.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(3.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (mode, label) ->
-                    FilterChip(selected = themeMode == mode, onClick = { onThemeMode(mode) }, label = { Text(label) }, modifier = Modifier.weight(1f))
+                    CategoryChip(label, themeMode == mode, MaterialTheme.colorScheme.primary, Modifier.weight(1f)) { onThemeMode(mode) }
                 }
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(4.dp))
         SettingsGroup("Your profile") {
-            Text("Name", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(Modifier.height(7.dp))
-            EntryField(name, onName, "A name for the greeting", false, 48.dp)
+            EntryField(name, onName, "A name for the greeting", false, 38.dp)
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(4.dp))
         SettingsGroup("Your writing stays yours") {
             Text("Thoughts are stored in an encrypted database on this device. logbook has no account, network AI, sync, ads or analytics. JSON files contain private writing; choose a destination you trust.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(5.dp))
             SecondaryAction("Export private JSON", Icons.Rounded.FileDownload, onExport, Modifier.fillMaxWidth())
-            Spacer(Modifier.height(7.dp))
+            Spacer(Modifier.height(3.dp))
             SecondaryAction("Import logbook JSON", Icons.Rounded.FileUpload, onImport, Modifier.fillMaxWidth())
-            Spacer(Modifier.height(7.dp))
+            Spacer(Modifier.height(1.dp))
             TextButton(onClick = onClear, modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)) {
                 Icon(Icons.Rounded.DeleteOutline, null, tint = MaterialTheme.colorScheme.error); Spacer(Modifier.width(8.dp))
                 Text("Delete thoughts and tasks", color = MaterialTheme.colorScheme.error)
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(4.dp))
         SettingsGroup("About logbook") {
             Text("A private mind space. Local-first by design; voice uses only Android’s on-device recognizer when available.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(2.dp))
             TextButton(onClick = onIntro, modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)) { Text("See the welcome again") }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(4.dp))
     }
 }
 
@@ -391,6 +424,7 @@ internal fun ComposerScreen(text: String, onText: (String) -> Unit, onBack: () -
 @Composable
 internal fun PreviewScreen(
     text: String, onText: (String) -> Unit, tags: List<String>, onToggleTag: (String) -> Unit,
+    customTagDraft: String, onCustomTagDraft: (String) -> Unit, onAddCustomTag: () -> Unit,
     taskSuggested: Boolean, addTask: Boolean, onAddTask: (Boolean) -> Unit,
     onBack: () -> Unit, onSave: () -> Unit, similar: List<SimilarMemory>, onRelated: (String) -> Unit
 ) {
@@ -423,10 +457,38 @@ internal fun PreviewScreen(
         Text("Suggested shelves", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
         Text("Pick the labels that help you find it later.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
-        LogbookCategories.keys.toList().chunked(4).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                row.forEach { key ->
-                    CategoryChip(LogbookCategories[key].orEmpty(), key in tags, MaterialTheme.colorScheme.primary, Modifier.weight(1f)) { onToggleTag(key) }
+        val allTagOptions = (LogbookCategories.keys.toList() + tags.filterNot { it in LogbookCategories }.sorted()).distinct()
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            allTagOptions.forEach { key ->
+                CategoryChip(LogbookCategories[key] ?: key.replace('-', ' '), key in tags, MaterialTheme.colorScheme.primary) { onToggleTag(key) }
+            }
+        }
+        Spacer(Modifier.height(7.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = customTagDraft,
+                onValueChange = onCustomTagDraft,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Add your own label", style = MaterialTheme.typography.bodySmall) },
+                singleLine = true,
+                shape = CircleShape,
+                textStyle = MaterialTheme.typography.bodySmall
+            )
+            TextButton(onClick = onAddCustomTag, enabled = customTagDraft.isNotBlank(), contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Add") }
+        }
+        val evidence = remember(text) { SmartNlp.tagEvidence(text) }
+        Spacer(Modifier.height(8.dp))
+        DewSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("How suggestions work", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+                Text("A note can have several shelves. These suggestions come from local phrase matches—not a cloud AI—and you can keep, remove, or add labels.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (evidence.isEmpty()) {
+                    Text("No strong topic phrase matched, so Ideas is the gentle fallback. Links, dates, names, and action wording are also noticed when present.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Spacer(Modifier.height(2.dp))
+                    evidence.forEach { (tag, matches) ->
+                        Text("${LogbookCategories[tag] ?: tag.replace('-', ' ')} · ${matches.joinToString(" / ")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
@@ -473,9 +535,10 @@ internal fun BootSplash(onDismiss: () -> Unit) {
     }
     val wordAlpha by animateFloatAsState(if (phase >= 2) 1f else 0f, tween(420), label = "splash-word-alpha")
     val wordScale by animateFloatAsState(if (phase >= 2) 1f else 0.86f, tween(500), label = "splash-word-scale")
-    val notes = listOf("an idea", "a person", "a link", "a next step")
-    val starts = listOf((-92).dp to (-44).dp, 68.dp to (-48).dp, (-78).dp to 50.dp, 76.dp to 48.dp)
-    val stacks = listOf((-32).dp to (-20).dp, 31.dp to (-19).dp, (-32).dp to 19.dp, 31.dp to 20.dp)
+    val notes = listOf("an idea", "a person", "a link", "a next step", "a feeling", "a place")
+    val starts = listOf((-112).dp to (-54).dp, (-38).dp to (-64).dp, 58.dp to (-58).dp, 112.dp to (-22).dp, (-62).dp to 54.dp, 60.dp to 52.dp)
+    val stacks = listOf((-82).dp to (-29).dp, (-30).dp to (-39).dp, 28.dp to (-39).dp, 82.dp to (-29).dp, (-28).dp to 35.dp, 30.dp to 35.dp)
+    val logoScale by animateFloatAsState(if (phase >= 1) 1f else 0.65f, tween(520), label = "splash-logo-scale")
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.fillMaxWidth().height(142.dp), contentAlignment = Alignment.Center) {
@@ -487,8 +550,9 @@ internal fun BootSplash(onDismiss: () -> Unit) {
                         .background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
                         .padding(horizontal = 10.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
                 }
-                Text("logbook", Modifier.alpha(wordAlpha).scale(wordScale), style = MaterialTheme.typography.headlineLarge.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Serif, fontWeight = FontWeight.Bold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), color = MaterialTheme.colorScheme.primary)
+                Image(painterResource(R.drawable.logbook_logo), "logbook logo", Modifier.size(76.dp).scale(logoScale))
             }
+            Text("logbook", Modifier.alpha(wordAlpha).scale(wordScale), style = MaterialTheme.typography.headlineMedium.copy(fontFamily = LogbookBody, fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
             Text("your private mind space", Modifier.alpha(wordAlpha), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp)) { Text("Skip") }
