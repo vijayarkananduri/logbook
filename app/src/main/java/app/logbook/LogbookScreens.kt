@@ -294,6 +294,7 @@ private fun HubCard(hub: EntityHub, onClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TasksScreen(todos: List<Todo>, draft: String, draftDue: Long?, onDraft: (String) -> Unit, onDraftDue: (Long?) -> Unit, onAdd: () -> Unit, onToggle: (Todo) -> Unit, onDelete: (Todo) -> Unit) {
     val ordered = todos.sortedWith(compareBy<Todo> { it.completed }.thenBy { it.due ?: Long.MAX_VALUE }.thenByDescending { it.created })
