@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import kotlinx.coroutines.Dispatchers
@@ -56,9 +57,11 @@ private fun LogbookApp(store: LocalStore) {
     val context = LocalContext.current
     val prefs = remember(context) { context.getSharedPreferences("settings", 0) }
     var name by remember { mutableStateOf(prefs.getString("name", "").orEmpty()) }
-    var dark by remember { mutableStateOf(prefs.getBoolean("dark", false)) }
-    var reducedEffects by remember { mutableStateOf(prefs.getBoolean("low", false)) }
-    var accentIndex by remember { mutableIntStateOf(prefs.getInt("accent", 0).coerceIn(0, 5)) }
+    var themeMode by remember(prefs) {
+        mutableStateOf(prefs.getString("theme_mode", null)?.takeIf { it in setOf("system", "light", "dark") }
+            ?: if (prefs.getBoolean("dark", false)) "dark" else "system")
+    }
+    val dark = when (themeMode) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
     var screen by remember { mutableStateOf(if (prefs.getBoolean("onboarded", name.isNotBlank())) LogbookScreen.Home else LogbookScreen.Welcome) }
     var memories by remember { mutableStateOf(emptyList<Memory>()) }
     var todos by remember { mutableStateOf(emptyList<Todo>()) }
@@ -69,7 +72,8 @@ private fun LogbookApp(store: LocalStore) {
     var addTaskWithMemory by remember { mutableStateOf(false) }
     var editingMemory by remember { mutableStateOf<Memory?>(null) }
     var selectedMemory by remember { mutableStateOf<Memory?>(null) }
-    var confirmMemoryDelete by remember { mutableStateOf(false) }
+    var memoryToDelete by remember { mutableStateOf<Memory?>(null) }
+    var taskToDelete by remember { mutableStateOf<Todo?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     var taskDraft by remember { mutableStateOf("") }
     var assistantDraft by remember { mutableStateOf("") }
@@ -283,7 +287,7 @@ private fun LogbookApp(store: LocalStore) {
     }
     DisposableEffect(Unit) { onDispose { recognizer?.destroy() } }
 
-    LogbookTheme(dark, accentIndex, reducedEffects) {
+    LogbookTheme(dark) {
         val systemBarColor = MaterialTheme.colorScheme.background.toArgb()
         SideEffect {
             (context as? ComponentActivity)?.window?.let { window ->
@@ -335,58 +339,36 @@ private fun LogbookApp(store: LocalStore) {
                         onBack = { screen = LogbookScreen.Compose },
                         onSave = { saveThought(addTaskWithMemory) }
                     )
-                    else -> Column(Modifier.fillMaxSize()) {
-                        BrandBar(name) { screen = LogbookScreen.Settings }
-                        AnimatedContent(
-                            targetState = screen,
-                            modifier = Modifier.weight(1f),
-                            transitionSpec = { fadeIn() togetherWith fadeOut() },
-                            label = "logbook-screen"
-                        ) { route ->
-                            when (route) {
-                                LogbookScreen.Home -> HomeScreen(name, memories, todos, { startCapture() }, { selectedMemory = it }, { screen = LogbookScreen.Search })
-                                LogbookScreen.Search -> SearchScreen(memories, query, { query = it }, category, { category = it }, { selectedMemory = it })
-                                LogbookScreen.Tasks -> TasksScreen(
-                                    todos, taskDraft, { taskDraft = it },
-                                    { if (taskDraft.isNotBlank()) { saveTask(taskDraft); taskDraft = "" } },
-                                    { task ->
-                                        val updated = task.copy(completed = !task.completed)
-                                        scope.launch {
-                                            withContext(Dispatchers.IO) {
-                                                store.saveTodo(updated)
-                                                if (updated.completed) cancelReminder(context, updated.id) else scheduleReminder(context, updated)
-                                            }
-                                            refresh()
-                                        }
-                                    },
-                                    { task -> scope.launch { withContext(Dispatchers.IO) { cancelReminder(context, task.id); store.deleteTodo(task.id) }; refresh(); toast("Task removed") } }
-                                )
-                                LogbookScreen.Guide -> GuideScreen(chat, assistantDraft, { assistantDraft = it }) {
-                                    val question = assistantDraft.trim()
-                                    if (question.isNotBlank()) {
-                                        chat.add(ChatLine(true, question))
-                                        chat.add(ChatLine(false, localAnswer(question)))
-                                        assistantDraft = ""
+                    else -> Box(Modifier.fillMaxSize()) {
+                        Column(Modifier.fillMaxSize()) {
+                            BrandBar(name) { screen = LogbookScreen.Settings }
+                            AnimatedContent(targetState = screen, modifier = Modifier.weight(1f), transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "logbook-screen") { route ->
+                                when (route) {
+                                    LogbookScreen.Home -> HomeScreen(name, memories, todos, { selectedMemory = it }, { memoryToDelete = it }, { screen = LogbookScreen.Search })
+                                    LogbookScreen.Search -> SearchScreen(memories, query, { query = it }, category, { category = it }, { selectedMemory = it }, { memoryToDelete = it })
+                                    LogbookScreen.Tasks -> TasksScreen(todos, taskDraft, { taskDraft = it },
+                                        { if (taskDraft.isNotBlank()) { saveTask(taskDraft); taskDraft = "" } },
+                                        { task -> val updated = task.copy(completed = !task.completed); scope.launch {
+                                            withContext(Dispatchers.IO) { store.saveTodo(updated); if (updated.completed) cancelReminder(context, updated.id) else scheduleReminder(context, updated) }; refresh()
+                                        } }, { task -> taskToDelete = task })
+                                    LogbookScreen.Guide -> GuideScreen(chat, assistantDraft, { assistantDraft = it }) {
+                                        val question = assistantDraft.trim()
+                                        if (question.isNotBlank()) { chat.add(ChatLine(true, question)); chat.add(ChatLine(false, localAnswer(question))); assistantDraft = "" }
                                     }
+                                    LogbookScreen.Settings -> SettingsScreen(name = name,
+                                        onName = { value -> name = value.take(40); prefs.edit().putString("name", name).apply() }, themeMode = themeMode,
+                                        onThemeMode = { value -> themeMode = value; prefs.edit().putString("theme_mode", value).apply() },
+                                        onExport = { exportLauncher.launch("logbook_${SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())}.json") },
+                                        onImport = { importLauncher.launch(arrayOf("application/json", "text/*")) }, onClear = { confirmClear = true }, onIntro = { screen = LogbookScreen.Intro })
+                                    else -> Unit
                                 }
-                                LogbookScreen.Settings -> SettingsScreen(
-                                    name = name,
-                                    onName = { value -> name = value.take(40); prefs.edit().putString("name", name).apply() },
-                                    dark = dark,
-                                    onDark = { value -> dark = value; prefs.edit().putBoolean("dark", value).apply() },
-                                    reducedEffects = reducedEffects,
-                                    onReducedEffects = { value -> reducedEffects = value; prefs.edit().putBoolean("low", value).apply() },
-                                    accentIndex = accentIndex,
-                                    onAccent = { value -> accentIndex = value; prefs.edit().putInt("accent", value).apply() },
-                                    onExport = { exportLauncher.launch("logbook_${SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())}.json") },
-                                    onImport = { importLauncher.launch(arrayOf("application/json", "text/*")) },
-                                    onClear = { confirmClear = true },
-                                    onIntro = { screen = LogbookScreen.Intro }
-                                )
-                                else -> Unit
                             }
+                            BottomNavigation(screen) { screen = it }
                         }
-                        BottomNavigation(screen, MaterialTheme.colorScheme.primary) { screen = it }
+                        if (screen != LogbookScreen.Settings) Column(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 82.dp), verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.End) {
+                            if (screen != LogbookScreen.Search) SmallFloatingActionButton(onClick = { screen = LogbookScreen.Search }, containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.primary) { Icon(Icons.Rounded.Search, "Search") }
+                            FloatingActionButton(onClick = { startCapture() }, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) { Icon(Icons.Rounded.Add, "Add a thought") }
+                        }
                     }
                 }
             }
@@ -418,20 +400,24 @@ private fun LogbookApp(store: LocalStore) {
                         TextButton(onClick = { selectedMemory = null }) { Text("Done") }
                     }
                 },
-                dismissButton = { TextButton(onClick = { confirmMemoryDelete = true }) { Text("Delete", color = MaterialTheme.colorScheme.error) } }
+                dismissButton = { TextButton(onClick = { memoryToDelete = memory; selectedMemory = null }) { Text("Delete", color = MaterialTheme.colorScheme.error) } }
             )
         }
-        if (confirmMemoryDelete) AlertDialog(
-            onDismissRequest = { confirmMemoryDelete = false },
-            title = { Text("Let this thought go?") },
-            text = { Text("This removes the saved thought. Any linked task will stay, but will no longer point back to it.") },
-            confirmButton = { TextButton(onClick = {
-                selectedMemory?.id?.let { id -> scope.launch { withContext(Dispatchers.IO) { store.deleteMemory(id) }; refresh(); toast("Thought deleted") } }
-                selectedMemory = null
-                confirmMemoryDelete = false
-            }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { confirmMemoryDelete = false }) { Text("Keep it") } }
-        )
+        memoryToDelete?.let { memory -> AlertDialog(
+            onDismissRequest = { memoryToDelete = null }, title = { Text("Delete this thought?") },
+            text = { Text("The thought will be removed. Any linked task will stay, but will be unlinked from it.") },
+            confirmButton = { TextButton(onClick = { val id = memory.id; memoryToDelete = null; scope.launch {
+                runCatching { withContext(Dispatchers.IO) { store.deleteMemory(id) }; refresh(); toast("Thought deleted") }.onFailure { toast("Could not delete that thought") }
+            } }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { memoryToDelete = null }) { Text("Keep it") } }
+        ) }
+        taskToDelete?.let { task -> AlertDialog(
+            onDismissRequest = { taskToDelete = null }, title = { Text("Delete this task?") }, text = { Text("This also cancels its local reminder.") },
+            confirmButton = { TextButton(onClick = { taskToDelete = null; scope.launch {
+                runCatching { withContext(Dispatchers.IO) { cancelReminder(context, task.id); store.deleteTodo(task.id) }; refresh(); toast("Task removed") }.onFailure { toast("Could not remove that task") }
+            } }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { taskToDelete = null }) { Text("Keep it") } }
+        ) }
         if (confirmClear) AlertDialog(
             onDismissRequest = { confirmClear = false },
             title = { Text("Clear your Logbook?") },
